@@ -2,150 +2,79 @@ package surrealdbdriver
 
 import (
 	"context"
-	"database/sql"
 	"database/sql/driver"
-	"errors"
-	"io"
+	"log/slog"
 	"net/http"
-	"sync"
+
+	"github.com/gorilla/websocket"
 )
 
-// Ensure the driver implements the necessary interfaces
-var (
-	_ driver.Driver             = (*SurrealDriver)(nil)
-	_ driver.Conn               = (*SurrealConn)(nil)
-	_ driver.Queryer            = (*SurrealConn)(nil)
-	_ driver.Execer             = (*SurrealConn)(nil)
-	_ driver.Stmt               = (*SurrealStmt)(nil)
-	_ driver.Rows               = (*SurrealRows)(nil)
-	_ driver.Tx                 = (*SurrealTx)(nil)
-	_ driver.ConnBeginTx        = (*SurrealConn)(nil)
-	_ driver.Pinger             = (*SurrealConn)(nil)
-	_ driver.ConnPrepareContext = (*SurrealConn)(nil)
-	_ driver.ExecerContext      = (*SurrealConn)(nil)
-	_ driver.QueryerContext     = (*SurrealConn)(nil)
-)
-
-// Driver definition
+// implements driver.Driver
 type SurrealDriver struct{}
 
-// Open a new connection
-func (d *SurrealDriver) Open(name string) (driver.Conn, error) {
-	// `name` could be a DSN like "ws://localhost:8000/rpc"
-	conn := &SurrealConn{dsn: name}
-	if err := conn.connect(); err != nil {
+func (*SurrealDriver) OpenConnector(address string) (*SurrealConnector, error) {
+	config, err := ParseUrl(address)
+	if err != nil {
 		return nil, err
 	}
-	return conn, nil
+	return &SurrealConnector{
+		Creds: config,
+	}, nil
 }
 
-// Connection definition
+// implements driver.DriverContext
+type SurrealDriverContext struct{}
+
+func (*SurrealDriverContext) OpenConnector(name string) (SurrealConnector, error)
+
+// implements driver.Connector
+type SurrealConnector struct {
+	Creds *CredentialConfig
+}
+
+func (*SurrealConnector) Connect(ctx context.Context) (SurrealConn, error)
+
+// implements driver.Conn
 type SurrealConn struct {
-	dsn    string
-	client *http.Client
-	mu     sync.Mutex
+	HTTPClient *http.Client
+	WSClient   *websocket.Conn
+	Driver     *SurrealDriver
+	Logger     *slog.Logger
 }
 
-// Connect to the database
-func (c *SurrealConn) connect() error {
-	c.client = &http.Client{}
-	return nil
+func (*SurrealConn) Prepare(query string) (SurrealStmt, error)
+func (con *SurrealConn) Close() error {
+	con.wsClient.Close()
 }
-
-// Close the connection
-func (c *SurrealConn) Close() error {
-	return nil
-}
-
-// Ping the database
-func (c *SurrealConn) Ping(ctx context.Context) error {
-	// Implement a ping request to SurrealDB
-	return nil
-}
-
-// Begin a transaction
-func (c *SurrealConn) Begin() (driver.Tx, error) {
-	return &SurrealTx{conn: c}, nil
-}
-
-// Execute a query
-func (c *SurrealConn) Query(query string, args []driver.Value) (driver.Rows, error) {
-	// Implement SurrealDB query execution via HTTP/WebSocket
-	return nil, errors.New("not implemented")
-}
-
-// Execute a non-query command
-func (c *SurrealConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	// Implement SurrealDB execution logic
-	return nil, errors.New("not implemented")
-}
-
-// Statement struct
-type SurrealStmt struct {
-	conn  *SurrealConn
-	query string
-}
-
-// Close statement
-func (s *SurrealStmt) Close() error {
-	return nil
-}
-
-// Execute a statement
-func (s *SurrealStmt) Exec(args []driver.Value) (driver.Result, error) {
-	return s.conn.Exec(s.query, args)
-}
-
-// Query with a statement
-func (s *SurrealStmt) Query(args []driver.Value) (driver.Rows, error) {
-	return s.conn.Query(s.query, args)
-}
-
-// Rows struct
-type SurrealRows struct {
-	columns []string
-	data    [][]interface{}
-	index   int
-}
-
-// Close rows
-func (r *SurrealRows) Close() error {
-	return nil
-}
-
-// Column names
-func (r *SurrealRows) Columns() []string {
-	return r.columns
-}
-
-// Next row iteration
-func (r *SurrealRows) Next(dest []driver.Value) error {
-	if r.index >= len(r.data) {
-		return io.EOF
+func (*SurrealConn) Begin() (driver.Tx, error)
+func (con *SurrealConn) IsValid() bool {
+	if err := con.WSClient.WriteMessage(websocket.PingMessage, nil); err != nil {
+		return false
 	}
-	for i, v := range r.data[r.index] {
-		dest[i] = v
-	}
-	r.index++
-	return nil
+	return true
 }
 
-// Transaction struct
-type SurrealTx struct {
-	conn *SurrealConn
+// implements driver.Validator's method IsValid
+func (*SurrealConn) Exec(sql string, values []driver.Value) (driver.Result, error) {
+	// Write to WS client
 }
 
-// Commit transaction
-func (t *SurrealTx) Commit() error {
-	return nil
-}
+// implements driver.Stmt
+type SurrealStmt struct{}
 
-// Rollback transaction
-func (t *SurrealTx) Rollback() error {
-	return nil
-}
+// implements driver.Tx
+//type SurrealTx struct {}
 
-// Register the driver
-func init() {
-	sql.Register("surrealdb", &SurrealDriver{})
-}
+// implements driver.ConnBeginTx
+//type SurrealConnBeginTx struct {}
+//func(*SurrealConnBeginTx) BeginTx(ctx context.Context, opts sql.TxOptions) (SurrealTx, error)
+
+// implements driver.Rows
+type SurrealRows struct{}
+
+func (*SurrealRows) Columns() []string
+func (*SurrealRows) Close() error
+func (*SurrealRows) Next(dest []driver.Value) error
+
+// Implement
+type SurrealScanner struct{}
