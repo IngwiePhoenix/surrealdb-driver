@@ -23,15 +23,15 @@ type SurrealAPIRequest struct {
 	Params interface{}      `json:"params,omitempty"`
 }
 
-type SurrealAPIResponse[T interface{}] struct {
+type SurrealAPIResponse struct {
 	ID     SurrealRequestID `json:"id"`
-	Result T                `json:"result"`
+	Result any              `json:"result"`
 	// Usually returned from HTTP errors
 	Code        int    `json:"code,omitempty"`
 	Details     string `json:"details,omitempty"`
 	Information string `json:"information,omitempty"`
 	// Actual errors
-	Error struct {
+	Error *struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
