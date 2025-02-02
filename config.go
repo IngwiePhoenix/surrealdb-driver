@@ -14,6 +14,15 @@ type CredentialConfig struct {
 	URL       *url.URL
 }
 
+func (c *CredentialConfig) GetDBUrl() string {
+	plainUrl := url.URL{
+		Scheme:  c.URL.Scheme,
+		Host:    c.URL.Host,
+		RawPath: c.URL.RawPath,
+	}
+	return plainUrl.String()
+}
+
 func ParseUrl(inputUrl string) (*CredentialConfig, error) {
 	u, err := url.Parse(inputUrl)
 	if err != nil {
