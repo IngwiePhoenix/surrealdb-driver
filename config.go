@@ -1,26 +1,31 @@
 package surrealdbdriver
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 )
 
 type CredentialConfig struct {
-	Username  string
-	Password  string
-	Database  string
-	Namespace string
-	Token     string
-	URL       *url.URL
+	Username      string
+	Password      string
+	Database      string
+	Namespace     string
+	AccessControl string
+	Token         string
+	Method        AuthMethod
+	URL           *url.URL
+	extra         map[string]interface{}
 }
 
 func (c *CredentialConfig) GetDBUrl() string {
-	plainUrl := url.URL{
-		Scheme:  c.URL.Scheme,
-		Host:    c.URL.Host,
-		RawPath: c.URL.RawPath,
-	}
-	return plainUrl.String()
+	return fmt.Sprintf(
+		"%s://%s%s",
+		c.URL.Scheme,
+		c.URL.Host,
+		c.URL.EscapedPath(),
+	)
 }
 
 func ParseUrl(inputUrl string) (*CredentialConfig, error) {
@@ -30,25 +35,46 @@ func ParseUrl(inputUrl string) (*CredentialConfig, error) {
 	}
 	c := &CredentialConfig{}
 	q := u.Query()
-	if q.Has("token") {
-		c.Token = q.Get("token")
-	}
-	if q.Has("ns") {
-		c.Namespace = q.Get("ns")
-	}
-	if q.Has("db") {
-		c.Database = q.Get("db")
+	if !q.Has("method") {
+		return nil, errors.New("no authentication method specified")
 	}
 
-	if !q.Has("token") {
-		user := u.User
-		username := user.Username()
-		password, isSet := user.Password()
-		if username != "" && isSet {
-			c.Username = username
-			c.Password = password
-		} else {
-			return nil, errors.New("No token and no username/password set")
+	// Sanity check
+	c.Method = AuthMethod(q.Get("method"))
+	switch c.Method {
+	case AuthMethodRoot:
+		if _, ok := u.User.Password(); !ok && u.User.Username() != "" {
+			return nil, errors.New("root authentication method specified but no username or password provided")
+		}
+	case AuthMethodDB:
+		if _, ok := u.User.Password(); !ok && u.User.Username() != "" && !q.Has("db") && !q.Has("ns") {
+			return nil, errors.New("database authentication method specified but no username, password, namespace and database provided")
+		}
+	case AuthMethodRecord:
+		if _, ok := u.User.Password(); !ok && u.User.Username() != "" && !q.Has("db") && !q.Has("ns") && !q.Has("ac") {
+			return nil, errors.New("record authentication method specified but no username, password, namespace, database and access method provided")
+		}
+	case AuthMethodToken:
+		if !q.Has("token") {
+			return nil, errors.New("token authentication method specified but no access token provided")
+		}
+	default:
+		return nil, errors.New("unknown access method: " + string(c.Method))
+	}
+
+	// Assign
+	c.Username = u.User.Username()
+	c.Password, _ = u.User.Password()
+	c.Database = q.Get("db")
+	c.Namespace = q.Get("ns")
+	c.AccessControl = q.Get("ac")
+	c.Token = q.Get("token")
+
+	if q.Has("extra") {
+		extraStr := q.Get("extra")
+		err := json.Unmarshal([]byte(extraStr), &(c.extra))
+		if err != nil {
+			return nil, err
 		}
 	}
 

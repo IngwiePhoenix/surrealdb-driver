@@ -49,3 +49,14 @@ func checkNamedValue(value any) (driver.Value, error) {
 	}
 	return nil, fmt.Errorf("unsupported type %T, a %s", value, r.Kind())
 }
+
+type AuthMethod string
+
+const (
+	AuthMethodRoot      AuthMethod = "root"
+	AuthMethodDB        AuthMethod = "db"
+	AuthMethodRecord    AuthMethod = "record"
+	AuthMethodUnknown   AuthMethod = "unknown"
+	AuthMethodToken     AuthMethod = "token"
+	AuthMethodAnonymous AuthMethod = "none"
+)

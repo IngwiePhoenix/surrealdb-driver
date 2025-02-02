@@ -4,15 +4,20 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"log"
 
 	"github.com/gorilla/websocket"
 )
 
 // implements driver.Driver
-type SurrealDriver struct{}
+type SurrealDriver struct {
+	logger *log.Logger
+}
 
 var _ driver.Driver = (*SurrealDriver)(nil)
 var _ driver.DriverContext = (*SurrealDriver)(nil)
+
+//var _ sql.DB = (*SurrealDriver)(nil)
 
 func (d *SurrealDriver) Open(address string) (driver.Conn, error) {
 	config, err := ParseUrl(address)
@@ -46,6 +51,33 @@ func (d *SurrealDriver) OpenConnector(address string) (driver.Connector, error) 
 	}, nil
 }
 
+func (d *SurrealDriver) SetLogger(l *log.Logger) {
+	l.Println("Hello!")
+	d.logger = l
+}
+func (d *SurrealDriver) GetLogger() *log.Logger {
+	return d.logger
+}
+
+func (d *SurrealDriver) LogInfo(arg ...any) {
+	if d.logger != nil {
+		d.logger.Print(arg...)
+	}
+}
+func (d *SurrealDriver) LogFatal(arg ...any) {
+	if d.logger != nil {
+		d.logger.Fatal(arg...)
+	}
+}
+func (d *SurrealDriver) LogPanic(arg ...any) {
+	if d.logger != nil {
+		d.logger.Panic(arg...)
+	}
+}
+
+var SurrealDBDriver *SurrealDriver
+
 func init() {
-	sql.Register("surrealdb", &SurrealDriver{})
+	SurrealDBDriver = &SurrealDriver{logger: nil}
+	sql.Register("surrealdb", SurrealDBDriver)
 }

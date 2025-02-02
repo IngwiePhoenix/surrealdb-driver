@@ -3,6 +3,7 @@ package surrealdbdriver
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"time"
 )
 
@@ -23,6 +24,11 @@ type SurrealAPIRequest struct {
 	Params interface{}      `json:"params,omitempty"`
 }
 
+type SurrealAPIError struct {
+	Code    int64  `json:"code"`
+	Message string `json:"message"`
+}
+
 type SurrealAPIResponse struct {
 	ID     SurrealRequestID `json:"id"`
 	Result any              `json:"result"`
@@ -31,11 +37,42 @@ type SurrealAPIResponse struct {
 	Details     string `json:"details,omitempty"`
 	Information string `json:"information,omitempty"`
 	// Actual errors
-	Error *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-	} `json:"error,omitempty"`
+	Error SurrealAPIError `json:"error,omitempty"`
 }
+
+/*func (r *SurrealAPIResponse) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Check if the "error" field exists
+	if _, hasError := raw["error"]; hasError {
+		log.Println("unmarshalling found an error...")
+		// Temporary re-type to avoid re-calling this method.
+		type errorOnly SurrealAPIResponse
+		var errResponse errorOnly
+		if err := json.Unmarshal(data, &errResponse); err != nil {
+			return err
+		}
+		*r = SurrealAPIResponse{
+			ID:    errResponse.ID, // ID is always present
+			Error: errResponse.Error,
+		}
+		return nil
+	}
+
+	// Same re-type.
+	log.Println("unmarshalling found NO error!")
+	type normalResponse SurrealAPIResponse
+	var successResponse normalResponse
+	if err := json.Unmarshal(data, &successResponse); err != nil {
+		return err
+	}
+	*r = SurrealAPIResponse(successResponse)
+
+	return nil
+}*/
 
 // A few predefined structs:
 type SurrealVersion struct {
@@ -106,29 +143,44 @@ func (c *SurrealCaller) CallSignup(
 		Params: []any{params},
 	}
 }
-func (c *SurrealCaller) CallSignin(
-	ns string,
-	db string,
-	ac string,
-	username string,
-	password string,
-	extra map[string]string,
-) *SurrealAPIRequest {
-	params := map[string]string{
-		"NS":   ns,
-		"DB":   db,
-		"AC":   ac,
-		"user": username,
-		"pass": password,
+func (c *SurrealCaller) CallSignin(creds *CredentialConfig) (*SurrealAPIRequest, error) {
+	params := map[string]interface{}{}
+	switch creds.Method {
+	case AuthMethodRoot:
+		params["user"] = creds.Username
+		params["pass"] = creds.Password
+	case AuthMethodRecord:
+		params["user"] = creds.Username
+		params["pass"] = creds.Password
+		params["NS"] = creds.Namespace
+		params["DB"] = creds.Database
+		params["AC"] = creds.AccessControl
+	case AuthMethodDB:
+		params["user"] = creds.Username
+		params["pass"] = creds.Password
+		params["NS"] = creds.Namespace
+		params["DB"] = creds.Database
+	case AuthMethodUnknown:
+		return nil, errors.New("unknown authentication method")
+	case AuthMethodToken:
+		// nop: Must use different API call (identify)
+	case AuthMethodAnonymous:
+		// nop: No credentials needed (i.e. for mem:// storage)
+	default:
+		return nil, errors.New("unrecognized authentication method: " + string(creds.Method))
 	}
-	for k, v := range extra {
-		params[k] = v
+
+	if len(creds.extra) > 0 {
+		for k, v := range creds.extra {
+			params[k] = v
+		}
 	}
+
 	return &SurrealAPIRequest{
 		ID:     c.ConnID,
 		Method: "signin",
 		Params: []any{params},
-	}
+	}, nil
 }
 func (c *SurrealCaller) CallAuthenticate(token string) *SurrealAPIRequest {
 	return &SurrealAPIRequest{

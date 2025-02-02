@@ -107,5 +107,5 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 		rows.resultIdx = rows.resultIdx + 1
 		return nil
 	}
-	return errors.New("Reached end of next() unexpectedly")
+	return errors.New("reached end of next() unexpectedly")
 }
