@@ -20,6 +20,8 @@ import (
 // (via: https://pkg.go.dev/database/sql/driver#NamedValueChecker)
 func checkNamedValue(value any) (driver.Value, error) {
 	r := reflect.ValueOf(value)
+	fmt.Printf("!! converting: %T\n", value)
+
 	switch r.Kind() {
 	case reflect.Ptr:
 		if r.IsNil() {
@@ -36,11 +38,18 @@ func checkNamedValue(value any) (driver.Value, error) {
 	case reflect.Bool:
 		return r.Bool(), nil
 	case reflect.Slice:
+		fmt.Printf("!! 2nd converting: %s\n", r.Type().Elem().Kind())
 		switch t := r.Type(); {
 		case t == reflect.TypeOf(json.RawMessage{}):
 			return value, nil
 		case t.Elem().Kind() == reflect.Uint8:
 			return r.Bytes(), nil
+		/*case t.Elem().Kind() == reflect.String:
+		var strSlice []string
+		for i := 0; i < r.Len(); i++ {
+			strSlice = append(strSlice, r.Index(i).String())
+		}
+		return &strSlice, nil*/
 		default:
 			return nil, fmt.Errorf("unsupported type %T, a slice of %s", value, t.Elem().Kind())
 		}

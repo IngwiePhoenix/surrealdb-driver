@@ -29,12 +29,16 @@ func (rows *SurrealRows) Columns() (cols []string) {
 		for _, entry := range value {
 			rows.conn.Driver.LogInfo("Rows:columns, iterating: ", entry)
 			realValue := entry.(map[string]interface{})
-			for k := range realValue["result"].(map[string]interface{}) {
-				rows.conn.Driver.LogInfo("Rows:columns, 2nd level iteration: ", k)
-				if !seen[k] { // avoid dupes
-					seen[k] = true
-					cols = append(cols, k)
+			if unwrappedValue, ok := realValue["result"].(map[string]interface{}); ok {
+				for k := range unwrappedValue {
+					rows.conn.Driver.LogInfo("Rows:columns, 2nd level iteration: ", k)
+					if !seen[k] { // avoid dupes
+						seen[k] = true
+						cols = append(cols, k)
+					}
 				}
+			} else if _, ok := realValue["result"].(string); ok {
+				cols = []string{"value"}
 			}
 		}
 		rows.conn.Driver.LogInfo("Rows:columns, finished iteration: ", cols)
@@ -93,11 +97,17 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 		entry := value[rows.resultIdx]
 		rows.conn.Driver.LogInfo("Rows:next, current row: ", rows.resultIdx, entry)
 		realValue := entry.(map[string]interface{})
-		var i int = 0
-		for _, v := range realValue["result"].(map[string]interface{}) {
-			rows.conn.Driver.LogInfo("Rows:next, 2nd level iteration: ", i, v)
-			dest[i] = v
-			i = i + 1
+		if unwrappedValue, ok := realValue["result"].(map[string]interface{}); ok {
+			var i int = 0
+			for _, v := range unwrappedValue {
+				rows.conn.Driver.LogInfo("Rows:next, 2nd level iteration: ", i, v)
+				dest[i] = v
+				i = i + 1
+			}
+		} else if unwrappedValue, ok := realValue["result"].(string); ok {
+			dest[0] = unwrappedValue
+		} else {
+			return fmt.Errorf("nothing to return; result is %T", realValue["result"])
 		}
 		rows.conn.Driver.LogInfo("Rows:next, finished iteration: ", dest)
 		rows.resultIdx = rows.resultIdx + 1
@@ -174,3 +184,11 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 	rows.conn.Driver.LogInfo("Rows:next, wtf: ", rows.rawResult.Result)
 	panic("reached end of next() unexpectedly")
 }
+
+/*
+func (r *SurrealRows) ColumnTypeLength(index int) (length int64, ok bool) {
+
+}
+func (r *SurrealRows) ColumnTypeDatabaseTypeName(index int) string {
+}
+*/

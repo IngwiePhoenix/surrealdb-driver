@@ -16,6 +16,7 @@ var _ driver.Stmt = (*SurrealStmt)(nil)
 var _ driver.StmtExecContext = (*SurrealStmt)(nil)
 var _ driver.StmtQueryContext = (*SurrealStmt)(nil)
 var _ driver.NamedValueChecker = (*SurrealStmt)(nil)
+var _ driver.ValueConverter = (*SurrealStmt)(nil)
 
 func (stmt *SurrealStmt) Close() error {
 	if !stmt.conn.IsValid() {
@@ -25,6 +26,7 @@ func (stmt *SurrealStmt) Close() error {
 }
 
 func (stmt *SurrealStmt) NumInput() int {
+	stmt.conn.Driver.LogInfo("stmt:NumInput called")
 	// SurrealDB uses LET $<key> = <value>
 	// ... so, we actually, literally, don't know. o.o
 	// Technically we could count the number of $-signs, but that would be misleading,
@@ -34,6 +36,7 @@ func (stmt *SurrealStmt) NumInput() int {
 }
 
 func (stmt *SurrealStmt) Exec(args []driver.Value) (driver.Result, error) {
+	stmt.conn.Driver.LogInfo("stmt:Exec called")
 	mappedValues := map[string]interface{}{}
 	for key, v := range args {
 		mappedValues["_"+string(rune(key))] = v
@@ -43,6 +46,7 @@ func (stmt *SurrealStmt) Exec(args []driver.Value) (driver.Result, error) {
 
 // implements driver.StmtExecContext
 func (stmt *SurrealStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
+	stmt.conn.Driver.LogInfo("stmt:ExecContext called")
 	// TODO: Apply context to stmt.conn.WSClient
 	// NOTE: copying the default method here - not sure if values come in once in a while or not.
 	mappedValues := map[string]interface{}{}
@@ -53,6 +57,7 @@ func (stmt *SurrealStmt) ExecContext(ctx context.Context, args []driver.NamedVal
 }
 
 func (stmt *SurrealStmt) Query(args []driver.Value) (driver.Rows, error) {
+	stmt.conn.Driver.LogInfo("stmt:Query called")
 	mappedValues := map[string]interface{}{}
 	for key, v := range args {
 		mappedValues["_"+string(rune(key))] = v
@@ -62,6 +67,7 @@ func (stmt *SurrealStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 // implements driver.StmtQueryContext
 func (stmt *SurrealStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
+	stmt.conn.Driver.LogInfo("stmt:QueryContext called")
 	// TODO: Apply context to stmt.conn.WSClient
 	// NOTE: copying the default method here - not sure if values come in once in a while or not.
 	mappedValues := map[string]interface{}{}
@@ -72,6 +78,11 @@ func (stmt *SurrealStmt) QueryContext(ctx context.Context, args []driver.NamedVa
 }
 
 func (stmt *SurrealStmt) CheckNamedValue(nv *driver.NamedValue) (err error) {
+	stmt.conn.Driver.LogInfo("stmt:CheckNamedValue called")
 	nv.Value, err = checkNamedValue(nv.Value)
 	return
+}
+
+func (stmt *SurrealStmt) ConvertValue(v any) (driver.Value, error) {
+	return checkNamedValue(v)
 }

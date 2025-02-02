@@ -52,4 +52,57 @@ func TestDriverCreation(t *testing.T) {
 			t.Error("An error occured: ", err)
 		}
 	})
+
+	t.Run("ReturnBasicValue", func(t *testing.T) {
+		res, err := db.Query("RETURN \"foo\";")
+		t.Log("error after statement: ", err)
+		if err == nil {
+			cols, err := res.Columns()
+			t.Log("Columns: ", cols)
+			t.Log("Error: ", err)
+
+			for res.Next() {
+				var foo string
+				err := res.Scan(&foo)
+				t.Log(foo)
+				t.Log(err)
+				if err != nil {
+					break
+				}
+			}
+		} else {
+			t.Error("An error occured: ", err)
+		}
+	})
+
+	t.Run("ReturnStructuredData", func(t *testing.T) {
+		res, err := db.Query("RETURN { \"life\": 42, \"testWords\": [\"foo\", \"bar\", \"baz\"] };")
+		t.Log("error after statement: ", err)
+		if err == nil {
+			cols, err := res.Columns()
+			t.Log("Columns: ", cols)
+			t.Log("Error: ", err)
+
+			for res.Next() {
+				var life string
+				var testWords []interface{}
+				err := res.Scan(&life, &testWords)
+				t.Log("Results from scan:", life, testWords)
+				t.Log(err)
+				if err != nil {
+					break
+				}
+			}
+		} else {
+			t.Error("An error occured: ", err)
+		}
+	})
+
+	t.Run("ThrowOnPurpose", func(t *testing.T) {
+		_, err := db.Query("THROW \"aqua\"")
+		t.Log("error after statement: ", err)
+		if err.Error() != "ERR: An error occurred: aqua" {
+			t.Fatal("Wrong error message:", err)
+		}
+	})
 }

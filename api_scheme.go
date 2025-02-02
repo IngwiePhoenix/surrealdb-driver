@@ -86,7 +86,7 @@ type SurrealLiveNotification struct {
 	Result interface{} `json:"result"`
 }
 type SurrealQueryResponse struct {
-	ID     int         `json:"id"`
+	ID     int         `json:"id,omitempty"`
 	Result interface{} `json:"result"`
 	Status string      `json:"status,omitempty"`
 	Time   string      `json:"time,omitempty"`

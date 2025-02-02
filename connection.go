@@ -24,6 +24,7 @@ var _ driver.Conn = (*SurrealConn)(nil)
 var _ driver.ConnBeginTx = (*SurrealConn)(nil)
 var _ driver.ConnPrepareContext = (*SurrealConn)(nil)
 var _ driver.NamedValueChecker = (*SurrealConn)(nil)
+var _ driver.ValueConverter = (*SurrealConn)(nil)
 var _ driver.Pinger = (*SurrealConn)(nil)
 
 // Execute directly on the underlying WebSockets connection by utilizing the
@@ -50,6 +51,15 @@ func (con *SurrealConn) execObj(obj *SurrealAPIRequest) (*SurrealAPIResponse, er
 					": " +
 					res.Error.Message,
 			)
+		} else if queryResult, ok := res.Result.([]interface{}); ok {
+			con.Driver.LogInfo("Conn:execObj possibly a problem: ", queryResult)
+			if queryResult, ok := queryResult[0].(map[string]interface{}); ok {
+				con.Driver.LogInfo("Conn:execObj MORE possibly a problem: ", queryResult)
+				if status, ok := queryResult["status"].(string); ok && status != "OK" {
+					errMsg := queryResult["result"].(string)
+					return nil, errors.New(status + ": " + errMsg)
+				}
+			}
 		}
 	}
 	con.Driver.LogInfo("Conn:execObj end: ", res)
@@ -178,6 +188,11 @@ func (con *SurrealConn) CheckNamedValue(nv *driver.NamedValue) (err error) {
 	con.Driver.LogInfo("Conn:CheckNamedValue")
 	nv.Value, err = checkNamedValue(nv.Value)
 	return
+}
+
+func (con *SurrealConn) ConvertValue(v any) (driver.Value, error) {
+	con.Driver.LogInfo("Conn:ConvertValue")
+	return checkNamedValue(v)
 }
 
 func (con *SurrealConn) Ping(ctx context.Context) error {
