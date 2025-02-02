@@ -34,13 +34,15 @@ func (d *SurrealDriver) Open(address string) (driver.Conn, error) {
 }
 
 // implements driver.DriverContext
-func (*SurrealDriver) OpenConnector(address string) (driver.Connector, error) {
+func (d *SurrealDriver) OpenConnector(address string) (driver.Connector, error) {
 	config, err := ParseUrl(address)
 	if err != nil {
 		return nil, err
 	}
 	return &SurrealConnector{
-		Creds: config,
+		Creds:  config,
+		Dialer: &websocket.Dialer{},
+		driver: d,
 	}, nil
 }
 

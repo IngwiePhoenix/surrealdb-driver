@@ -15,6 +15,7 @@ type SurrealStmt struct {
 var _ driver.Stmt = (*SurrealStmt)(nil)
 var _ driver.StmtExecContext = (*SurrealStmt)(nil)
 var _ driver.StmtQueryContext = (*SurrealStmt)(nil)
+var _ driver.NamedValueChecker = (*SurrealStmt)(nil)
 
 func (stmt *SurrealStmt) Close() error {
 	if !stmt.conn.IsValid() {
@@ -68,4 +69,9 @@ func (stmt *SurrealStmt) QueryContext(ctx context.Context, args []driver.NamedVa
 		mappedValues["_"+string(rune(key))] = v
 	}
 	return stmt.conn.queryWithArgs(stmt.query, mappedValues)
+}
+
+func (stmt *SurrealStmt) CheckNamedValue(nv *driver.NamedValue) (err error) {
+	nv.Value, err = checkNamedValue(nv.Value)
+	return
 }

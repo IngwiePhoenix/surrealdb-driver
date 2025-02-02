@@ -19,6 +19,7 @@ type SurrealConn struct {
 var _ driver.Conn = (*SurrealConn)(nil)
 var _ driver.ConnBeginTx = (*SurrealConn)(nil)
 var _ driver.ConnPrepareContext = (*SurrealConn)(nil)
+var _ driver.NamedValueChecker = (*SurrealConn)(nil)
 
 // Execute directly on the underlying WebSockets connection by utilizing the
 // raw API objects.
@@ -115,4 +116,9 @@ func (con *SurrealConn) BeginTx(ctx context.Context, _ driver.TxOptions) (driver
 	return &SurrealConnBeginTx{
 		conn: con,
 	}, nil
+}
+
+func (con *SurrealConn) CheckNamedValue(nv *driver.NamedValue) (err error) {
+	nv.Value, err = checkNamedValue(nv.Value)
+	return
 }
