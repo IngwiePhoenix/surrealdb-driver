@@ -91,6 +91,11 @@ type SurrealQueryResponse struct {
 	Status string      `json:"status,omitempty"`
 	Time   string      `json:"time,omitempty"`
 }
+type SurrealInfoResponse struct {
+	result map[string]interface{}
+	status string
+	time   string
+}
 
 type SurrealCaller struct {
 	ConnID SurrealRequestID
