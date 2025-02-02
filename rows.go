@@ -13,6 +13,13 @@ type SurrealRows struct {
 	resultIdx int
 }
 
+func (rows *SurrealRows) Close() error {
+	if !rows.conn.IsValid() {
+		return driver.ErrBadConn
+	}
+	return rows.conn.Close()
+}
+
 func (rows *SurrealRows) Columns() (cols []string) {
 	if value, ok := rows.rawResult.Result.(map[string]interface{}); ok {
 		// Response contains key-value pairs
@@ -46,12 +53,7 @@ func (rows *SurrealRows) Columns() (cols []string) {
 	}
 	return cols
 }
-func (rows *SurrealRows) Close() error {
-	if !rows.conn.IsValid() {
-		return driver.ErrBadConn
-	}
-	return rows.conn.Close()
-}
+
 func (rows *SurrealRows) Next(dest []driver.Value) error {
 	// SurrealDB returns all results, at all time, with no paging.
 	// That means we have to write the result back one by one.

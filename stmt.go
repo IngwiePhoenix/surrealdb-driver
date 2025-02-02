@@ -1,6 +1,9 @@
 package surrealdbdriver
 
-import "context"
+import (
+	"context"
+	"database/sql/driver"
+)
 
 // implements driver.Stmt
 type SurrealStmt struct {
@@ -14,40 +17,39 @@ func (stmt *SurrealStmt) Close() error {
 	}
 	return stmt.conn.Close()
 }
+
 func (stmt *SurrealStmt) NumInput() int {
 	// SurrealDB uses LET $<key> = <value>
 	// ... so, we actually, literally, don't know. o.o
+	// Technically we could count the number of $-signs, but that would be misleading,
+	// since some of those are reserved.
+	// So, it is possible - but, honestly, I can't be arsed to implement it...yet.
 	return -1
 }
-func (stmt *SurrealStmt) Exec(args []driver.Value) (driver.Result, error)
+
+func (stmt *SurrealStmt) Exec(args []driver.Value) (driver.Result, error) {
+
+}
 func (stmt *SurrealStmt) Query(args []driver.Value) (driver.Rows, error)
 
 // implements driver.StmtExecContext
 func (stmt *SurrealStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
 	// TODO: Apply context to stmt.conn.WSClient
-	for _, arg := range args {
-		res, err := stmt.conn.execObj(
-			stmt.conn.Caller.CallLet(arg.Name, arg.Value)
-		)
+	// NOTE: copying the default method here - not sure if values come in once in a while or not.
+	mappedValues := map[string]interface{}{}
+	for _, v := range args {
+		mappedValues[v.Name] = v.Value
 	}
-	res, err := stmt.conn.execRaw(stmt.query, nil)
-	return &SurrealResult{
-		RawResult: res,
-	}, err
+	return stmt.conn.execWithArgs(sql, mappedValues)
 }
 
 // implements driver.StmtQueryContext
 func (stmt *SurrealStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
 	// TODO: Apply context to stmt.conn.WSClient
-	for _, arg := range args {
-		res, err := stmt.conn.execObj(
-			stmt.conn.Caller.CallLet(arg.Name, arg.Value)
-		)
+	// NOTE: copying the default method here - not sure if values come in once in a while or not.
+	mappedValues := map[string]interface{}{}
+	for key, v := range values {
+		mappedValues["_"+string(key)] = v
 	}
-	res, err := stmt.conn.execRaw(stmt.query, nil)
-	return &SurrealRows{
-		conn: stmt.conn,
-		rawResult: res,
-		resultIdx: 0,
-	}, err
+	return stmt.conn.execWithArgs(sql, mappedValues)
 }
