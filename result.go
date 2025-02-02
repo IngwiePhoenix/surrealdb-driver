@@ -1,10 +1,15 @@
 package surrealdbdriver
 
-import "errors"
+import (
+	"database/sql/driver"
+	"errors"
+)
 
 type SurrealResult struct {
 	RawResult *SurrealAPIResponse
 }
+
+var _ driver.Result = (*SurrealResult)(nil)
 
 // SurrealDB's "record IDs" are strings, not ints.
 // this is likely going to be a problem and a half...

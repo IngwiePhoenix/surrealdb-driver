@@ -16,6 +16,10 @@ type SurrealConn struct {
 	Caller   *SurrealCaller
 }
 
+var _ driver.Conn = (*SurrealConn)(nil)
+var _ driver.ConnBeginTx = (*SurrealConn)(nil)
+var _ driver.ConnPrepareContext = (*SurrealConn)(nil)
+
 // Execute directly on the underlying WebSockets connection by utilizing the
 // raw API objects.
 func (con *SurrealConn) execObj(obj *SurrealAPIRequest) (*SurrealAPIResponse, error) {
@@ -89,7 +93,7 @@ func (con *SurrealConn) ExecContext(ctx context.Context, sql string, args []driv
 func (con *SurrealConn) Exec(sql string, values []driver.Value) (driver.Result, error) {
 	mappedValues := map[string]interface{}{}
 	for key, v := range values {
-		mappedValues["_"+string(key)] = v
+		mappedValues["_"+string(rune(key))] = v
 	}
 	return con.execWithArgs(sql, mappedValues)
 }

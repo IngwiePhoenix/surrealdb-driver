@@ -11,6 +11,9 @@ import (
 // implements driver.Driver
 type SurrealDriver struct{}
 
+var _ driver.Driver = (*SurrealDriver)(nil)
+var _ driver.DriverContext = (*SurrealDriver)(nil)
+
 func (d *SurrealDriver) Open(address string) (driver.Conn, error) {
 	config, err := ParseUrl(address)
 	if err != nil {
@@ -31,7 +34,7 @@ func (d *SurrealDriver) Open(address string) (driver.Conn, error) {
 }
 
 // implements driver.DriverContext
-func (*SurrealDriver) OpenConnector(address string) (*SurrealConnector, error) {
+func (*SurrealDriver) OpenConnector(address string) (driver.Connector, error) {
 	config, err := ParseUrl(address)
 	if err != nil {
 		return nil, err

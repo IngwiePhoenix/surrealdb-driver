@@ -11,6 +11,11 @@ type SurrealStmt struct {
 	query string
 }
 
+// Checking interface compatibility per intellisense
+var _ driver.Stmt = (*SurrealStmt)(nil)
+var _ driver.StmtExecContext = (*SurrealStmt)(nil)
+var _ driver.StmtQueryContext = (*SurrealStmt)(nil)
+
 func (stmt *SurrealStmt) Close() error {
 	if !stmt.conn.IsValid() {
 		return driver.ErrBadConn
@@ -28,9 +33,12 @@ func (stmt *SurrealStmt) NumInput() int {
 }
 
 func (stmt *SurrealStmt) Exec(args []driver.Value) (driver.Result, error) {
-
+	mappedValues := map[string]interface{}{}
+	for key, v := range args {
+		mappedValues["_"+string(rune(key))] = v
+	}
+	return stmt.conn.execWithArgs(stmt.query, mappedValues)
 }
-func (stmt *SurrealStmt) Query(args []driver.Value) (driver.Rows, error)
 
 // implements driver.StmtExecContext
 func (stmt *SurrealStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
@@ -40,7 +48,15 @@ func (stmt *SurrealStmt) ExecContext(ctx context.Context, args []driver.NamedVal
 	for _, v := range args {
 		mappedValues[v.Name] = v.Value
 	}
-	return stmt.conn.execWithArgs(sql, mappedValues)
+	return stmt.conn.execWithArgs(stmt.query, mappedValues)
+}
+
+func (stmt *SurrealStmt) Query(args []driver.Value) (driver.Rows, error) {
+	mappedValues := map[string]interface{}{}
+	for key, v := range args {
+		mappedValues["_"+string(rune(key))] = v
+	}
+	return stmt.conn.queryWithArgs(stmt.query, mappedValues)
 }
 
 // implements driver.StmtQueryContext
@@ -48,8 +64,8 @@ func (stmt *SurrealStmt) QueryContext(ctx context.Context, args []driver.NamedVa
 	// TODO: Apply context to stmt.conn.WSClient
 	// NOTE: copying the default method here - not sure if values come in once in a while or not.
 	mappedValues := map[string]interface{}{}
-	for key, v := range values {
-		mappedValues["_"+string(key)] = v
+	for key, v := range args {
+		mappedValues["_"+string(rune(key))] = v
 	}
-	return stmt.conn.execWithArgs(sql, mappedValues)
+	return stmt.conn.queryWithArgs(stmt.query, mappedValues)
 }

@@ -23,7 +23,7 @@ func (rows *SurrealRows) Close() error {
 func (rows *SurrealRows) Columns() (cols []string) {
 	if value, ok := rows.rawResult.Result.(map[string]interface{}); ok {
 		// Response contains key-value pairs
-		for k, _ := range value {
+		for k := range value {
 			cols = append(cols, k)
 		}
 		return cols
@@ -32,7 +32,7 @@ func (rows *SurrealRows) Columns() (cols []string) {
 		// Response contains an array of k-v pairs
 		seen := map[string]bool{}
 		for _, v := range value {
-			for k, _ := range v {
+			for k := range v {
 				if !seen[k] { // avoid dupes
 					seen[k] = true
 					cols = append(cols, k)
