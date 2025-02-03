@@ -3,8 +3,10 @@ package gorm
 import (
 	"database/sql"
 	"encoding/json"
+	"strconv"
 	"strings"
 
+	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/gorm/clauses"
 	"gorm.io/gorm"
 	"gorm.io/gorm/callbacks"
 	"gorm.io/gorm/clause"
@@ -22,13 +24,13 @@ var (
 
 type SurrealGormConfig struct {
 	AlwaysReturn bool
+	DriverName   string
+	Url          string
 }
 
 type SurrealDialector struct {
 	*SurrealGormConfig
-	DriverName string
-	Conn       gorm.ConnPool
-	Url        string
+	Conn gorm.ConnPool
 }
 
 const (
@@ -77,65 +79,14 @@ func (dialector SurrealDialector) Initialize(db *gorm.DB) error {
 	for k, v := range dialector.ClauseBuilders() {
 		db.ClauseBuilders[k] = v
 	}
+	db.ClauseBuilders["CREATE"] = clauses.Create{}.Build
 
 	return nil
 }
 
 func (dialector SurrealDialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 	// TODO: SurrealDB has slightly different syntax here and there.
-	clauseBuilders := map[string]clause.ClauseBuilder{
-		ClauseOnConflict: func(c clause.Clause, builder clause.Builder) {
-			onConflict, ok := c.Expression.(clause.OnConflict)
-			if !ok {
-				c.Build(builder)
-				return
-			}
-
-			builder.WriteString("ON DUPLICATE KEY UPDATE ")
-			if len(onConflict.DoUpdates) == 0 {
-				if s := builder.(*gorm.Statement).Schema; s != nil {
-					var column clause.Column
-					onConflict.DoNothing = false
-
-					if s.PrioritizedPrimaryField != nil {
-						column = clause.Column{Name: s.PrioritizedPrimaryField.DBName}
-					} else if len(s.DBNames) > 0 {
-						column = clause.Column{Name: s.DBNames[0]}
-					}
-
-					if column.Name != "" {
-						onConflict.DoUpdates = []clause.Assignment{{Column: column, Value: column}}
-					}
-
-					builder.(*gorm.Statement).AddClause(onConflict)
-				}
-			}
-
-			for idx, assignment := range onConflict.DoUpdates {
-				if idx > 0 {
-					builder.WriteByte(',')
-				}
-
-				builder.WriteQuoted(assignment.Column)
-				builder.WriteByte('=')
-				if column, ok := assignment.Value.(clause.Column); ok && column.Table == "excluded" {
-					column.Table = ""
-					builder.WriteString("VALUES(")
-					builder.WriteQuoted(column)
-					builder.WriteByte(')')
-				} else {
-					builder.AddVar(builder, assignment.Value)
-				}
-			}
-		},
-		ClauseValues: func(c clause.Clause, builder clause.Builder) {
-			if values, ok := c.Expression.(clause.Values); ok && len(values.Columns) == 0 {
-				builder.WriteString("VALUES()")
-				return
-			}
-			c.Build(builder)
-		},
-	}
+	clauseBuilders := map[string]clause.ClauseBuilder{}
 
 	return clauseBuilders
 }
@@ -154,7 +105,9 @@ func (dialector SurrealDialector) Migrator(db *gorm.DB) gorm.Migrator {
 
 func (dialector SurrealDialector) BindVarTo(writer clause.Writer, stmt *gorm.Statement, v interface{}) {
 	// TODO: SurrealDB uses $<name>[: <type>] = <value> notation.
-	writer.WriteByte('?')
+	// Taken from the MSSql driver: https://github.com/go-gorm/sqlserver/blob/master/sqlserver.go#L147-L150
+	writer.WriteString("$_")
+	writer.WriteString(strconv.Itoa(len(stmt.Vars)))
 }
 
 func (dialector SurrealDialector) QuoteTo(writer clause.Writer, str string) {
@@ -167,18 +120,32 @@ func (dialector SurrealDialector) QuoteTo(writer clause.Writer, str string) {
 }
 
 func (dialector SurrealDialector) Explain(sql string, vars ...interface{}) string {
+	// TODO: Actually write a RegExp to s/($_[\d*])/\1/
 	return logger.ExplainSQL(sql, nil, `\`, vars...)
 }
 
 func (dialector SurrealDialector) DataTypeOf(field *schema.Field) string {
 	// TODO: Separate functions?
+	// TODO: Unaccounted types:
+	//         SurrealDB | Go            | Note
+	//       - arrays    | []any         |
+	//       - duration  | time.Duration |
+	//       - object    | interface{}   |
+	//       - literal   | any?          |
+	//       - option    | option[T]     |
+	//       - range     |               |
+	//       - record    | T             | specific type needed
+	//                   |               | supports constraint
+	//                   |               | i.e.: record<T [| T2 [|...]]>
+	//       - set       | make(T, N)    |
+	// TODO: decimal or float...? Probably a config value...?
 	switch field.DataType {
 	case schema.Bool:
 		return "bool"
 	case schema.Int, schema.Uint:
 		return "int"
 	case schema.Float:
-		return "float"
+		return "decimal"
 	case schema.String:
 		return "string"
 	case schema.Time:
@@ -199,4 +166,8 @@ func (dialector SurrealDialector) getSchemaCustomType(field *schema.Field) strin
 	}*/
 
 	return sqlType
+}
+
+func (dialector SurrealDialector) DefaultValueOf(field *schema.Field) clause.Expression {
+	return clause.Expr{SQL: "DEFAULT"}
 }

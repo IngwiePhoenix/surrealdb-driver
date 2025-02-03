@@ -14,7 +14,7 @@ type Create struct {
 }
 
 func (c Create) Build(builder clause.Builder) {
-	sql := fmt.Sprintf("CREATE %s SET ", s.Table)
+	sql := fmt.Sprintf("CREATE %s SET ", c.Table)
 	params := []interface{}{}
 
 	i := 0
@@ -29,4 +29,10 @@ func (c Create) Build(builder clause.Builder) {
 
 	builder.WriteString(sql)
 	builder.AddVar(builder, params...)
+}
+
+func CreateClauseBuilder(c clause.Clause, b clause.Builder) {
+	if _, ok := c.Expression.(clause.Insert); ok {
+		return
+	}
 }
