@@ -105,4 +105,40 @@ func TestDriverCreation(t *testing.T) {
 			t.Fatal("Wrong error message:", err)
 		}
 	})
+
+	t.Run("InfoQueryToStruct", func(t *testing.T) {
+		rows, err := db.Query("INFO FOR DB;")
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		cols, err := rows.Columns()
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		idx := driver.IndexOfString(cols, "tables")
+		if idx == -1 {
+			t.Error("could not determine tables column")
+			return
+		}
+		for rows.Next() {
+			valuePtrs := make([]interface{}, len(cols))
+			values := make([]interface{}, len(cols))
+			for i := range values {
+				valuePtrs[i] = &values[i]
+			}
+			rows.Scan(valuePtrs...)
+			results := map[string]map[string]interface{}{}
+			for i, c := range cols {
+				results[c] = values[i].(map[string]interface{})
+			}
+			t.Log("valuePtrs: ", valuePtrs)
+			t.Log("values: ", values)
+			t.Log("Columns: ", cols)
+			t.Log("Table Column index: ", idx)
+			t.Log("Tables: ", values[idx])
+			t.Logf("results['tables'] = %T", results["tables"])
+			t.Log(results["tables"])
+		}
+		//t.Log("Tables: ", info)
+	})
 }

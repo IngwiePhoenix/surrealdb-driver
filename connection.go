@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
 
@@ -36,10 +37,23 @@ func (con *SurrealConn) execObj(obj *SurrealAPIRequest) (*SurrealAPIResponse, er
 		return nil, err
 	}
 	res := &SurrealAPIResponse{}
-	if _, msg, err := con.WSClient.ReadMessage(); err != nil {
+	mtyp, msg, err := con.WSClient.ReadMessage()
+	if err != nil {
 		con.Driver.LogInfo("Conn:execObj, ReadMessage: ", err)
 		return nil, err
+	} else if mtyp != websocket.BinaryMessage && mtyp != websocket.TextMessage {
+		con.Driver.LogInfo("Conn:execObj, ReadMessage, wrong msg type: ", mtyp)
+		switch mtyp {
+		case websocket.CloseMessage:
+			return nil, errors.New("received unexpected CloseMessage")
+		case websocket.PingMessage:
+		case websocket.PongMessage:
+			return nil, errors.New("received unexpected Ping/Pong message")
+		default:
+			return nil, fmt.Errorf("received unrecognized, unexpected message type %d", mtyp)
+		}
 	} else {
+		// And this is where all my troubble begins, and ends.
 		err := json.Unmarshal(msg, res)
 		con.Driver.LogInfo("Conn:execObj, ReadMessage, json.Unmarshal: ", err, string(msg))
 		if err != nil {
@@ -102,6 +116,15 @@ func (con *SurrealConn) performLogin() error {
 	if err != nil {
 		con.Driver.LogInfo("Conn:performLogin error: ", err)
 		return err
+	}
+	// Attempt to run a `use [ns, db]`. Strings are empty (thus "null") by default.
+	if con.creds.Method == AuthMethodDB || con.creds.Method == AuthMethodRoot {
+		msg = con.Caller.CallUse(con.creds.Namespace, con.creds.Database)
+		res, err = con.execObj(msg)
+		if err != nil {
+			con.Driver.LogInfo("Conn:performLogin error on use: ", err)
+			return err
+		}
 	}
 	con.Driver.LogInfo("Conn:performLogin success: ", res)
 	return err

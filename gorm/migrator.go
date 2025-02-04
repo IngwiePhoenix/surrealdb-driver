@@ -1,6 +1,7 @@
 package gorm
 
 import (
+	driver "github.com/senpro-it/dsb-tool/extras/surrealdb-driver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/migrator"
@@ -13,6 +14,8 @@ type SurrealDBMigrator struct {
 
 var _ gorm.Migrator = (*SurrealDBMigrator)(nil)
 
+const SDB_getTables = ""
+
 func (m SurrealDBMigrator) AutoMigrate(dst ...interface{}) error
 
 func (m SurrealDBMigrator) CurrentDatabase() string
@@ -23,7 +26,13 @@ func (m SurrealDBMigrator) CreateTable(dst ...interface{}) error
 func (m SurrealDBMigrator) DropTable(dst ...interface{}) error
 func (m SurrealDBMigrator) HasTable(dst interface{}) bool
 func (m SurrealDBMigrator) RenameTable(oldName, newName interface{}) error
-func (m SurrealDBMigrator) GetTables() (tableList []string, err error)
+func (m SurrealDBMigrator) GetTables() (tableList []string, err error) {
+	info := driver.SurrealInfoResponse{}
+	m.DB.Raw("INFO FOR DB;").Scan(&info)
+	for tableName, _ := range info.Result.Tables {
+		tableList = append(tableList, tableName)
+	}
+}
 func (m SurrealDBMigrator) TableType(dst interface{}) (gorm.TableType, error)
 
 func (m SurrealDBMigrator) AddColumn(dst interface{}, field string) error

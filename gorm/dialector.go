@@ -79,7 +79,10 @@ func (dialector SurrealDialector) Initialize(db *gorm.DB) error {
 	for k, v := range dialector.ClauseBuilders() {
 		db.ClauseBuilders[k] = v
 	}
-	db.ClauseBuilders["CREATE"] = clauses.Create{}.Build
+	db.ClauseBuilders["CREATE"] = CallbackToStructClause[
+		clauses.Create,
+		clause.Insert,
+	]()
 
 	return nil
 }
@@ -92,7 +95,7 @@ func (dialector SurrealDialector) ClauseBuilders() map[string]clause.ClauseBuild
 }
 
 func (dialector SurrealDialector) Migrator(db *gorm.DB) gorm.Migrator {
-	return Migrator{
+	return SurrealDBMigrator{
 		Migrator: migrator.Migrator{
 			Config: migrator.Config{
 				DB:        db,

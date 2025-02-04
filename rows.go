@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
+	"sort"
 )
 
 // implements driver.Rows
@@ -42,41 +43,12 @@ func (rows *SurrealRows) Columns() (cols []string) {
 			}
 		}
 		rows.conn.Driver.LogInfo("Rows:columns, finished iteration: ", cols)
+
+		// HACK: stringmaps in go do not keep order. So I have to "make" one.
+		sort.Strings(cols)
+		rows.conn.Driver.LogInfo("Rows:columns, finished iteration (sorted): ", cols)
 		return cols
 	}
-	/*
-		if value, ok := rows.rawResult.Result.(map[string]interface{}); ok {
-			// Response contains key-value pairs
-			for k := range value {
-				cols = append(cols, k)
-			}
-			return cols
-		}
-		if value, ok := rows.rawResult.Result.([]map[string]interface{}); ok {
-			// Response contains an array of k-v pairs
-			seen := map[string]bool{}
-			for _, v := range value {
-				for k := range v {
-					if !seen[k] { // avoid dupes
-						seen[k] = true
-						cols = append(cols, k)
-					}
-				}
-			}
-			return cols
-		}
-		if _, ok := rows.rawResult.Result.(string); ok {
-			// Single string response
-			cols = []string{"value"}
-			return cols
-		}
-		if _, ok := rows.rawResult.Result.([]string); ok {
-			// Array-of-string response
-			cols = []string{"values"}
-			return cols
-		}
-		return cols
-	*/
 	panic("reached columns() unexpectedly")
 }
 
@@ -98,11 +70,10 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 		rows.conn.Driver.LogInfo("Rows:next, current row: ", rows.resultIdx, entry)
 		realValue := entry.(map[string]interface{})
 		if unwrappedValue, ok := realValue["result"].(map[string]interface{}); ok {
-			var i int = 0
-			for _, v := range unwrappedValue {
+			cols := rows.Columns()
+			for i, v := range cols {
 				rows.conn.Driver.LogInfo("Rows:next, 2nd level iteration: ", i, v)
-				dest[i] = v
-				i = i + 1
+				dest[i] = unwrappedValue[v]
 			}
 		} else if unwrappedValue, ok := realValue["result"].(string); ok {
 			dest[0] = unwrappedValue

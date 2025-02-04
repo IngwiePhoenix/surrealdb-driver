@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"time"
+
+	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/surrealtypes"
 )
 
 type SurrealRequestID = string
@@ -91,10 +93,16 @@ type SurrealQueryResponse struct {
 	Status string      `json:"status,omitempty"`
 	Time   string      `json:"time,omitempty"`
 }
-type SurrealInfoResponse struct {
-	result map[string]interface{}
-	status string
-	time   string
+
+type SurrealInfoQueryResponse struct {
+	Accesses  surrealtypes.StringMap `json:"accesses"`
+	Analyzers surrealtypes.StringMap `json:"analyzers"`
+	Configs   surrealtypes.StringMap `json:"configs"`
+	Functions surrealtypes.StringMap `json:"functions"`
+	Models    surrealtypes.StringMap `json:"models"`
+	Params    surrealtypes.StringMap `json:"params"`
+	Tables    surrealtypes.StringMap `json:"tables"`
+	Users     surrealtypes.StringMap `json:"users"`
 }
 
 type SurrealCaller struct {
@@ -114,11 +122,23 @@ func (c *SurrealCaller) CallVersion() *SurrealAPIRequest {
 		Params: nil,
 	}
 }
-func (c *SurrealCaller) CallUse(db string, ns string) *SurrealAPIRequest {
+func (c *SurrealCaller) CallUse(ns string, db string) *SurrealAPIRequest {
+	// TODO: There is currently no "none" support...which is invalid JSON, too. O.o
+	params := []interface{}{}
+	if ns == "" {
+		params = append(params, nil)
+	} else {
+		params = append(params, ns)
+	}
+	if db == "" {
+		params = append(params, nil)
+	} else {
+		params = append(params, db)
+	}
 	return &SurrealAPIRequest{
 		ID:     c.ConnID,
 		Method: "use",
-		Params: []string{ns, db},
+		Params: params,
 	}
 }
 func (c *SurrealCaller) CallInfo() *SurrealAPIRequest {
