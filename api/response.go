@@ -32,10 +32,51 @@ type GenericResponse[T ResultTypes] struct {
 }
 
 type LiveNotificationResponse struct {
-	Action string `json:"action"`
-	Id string `json:"id"`
+	Action string    `json:"action"`
+	Id     string    `json:"id"`
 	Result st.Object `json:"result"`
 }
+
+/*
+TL;DR:
+	# Auth
+	Signin:				string (token)
+	Signup:				string (token)
+	Invalidate:			null
+	Info:				object
+
+	# Querying
+	Query:				object + array of objects (special)
+	GraphQL:			object (special)
+
+	# CRUD / NoSQL-ish
+	Select: 			array of objects
+	Create: 			array of objects
+	Insert: 			array of objects
+	Merge: 				array of objects
+	Patch:				array of objects (JSON Patch)
+	Insert Relation: 	Object
+	Relate: 			object
+	Update: 			object
+	Upsert: 			object
+	Delete: 			object
+
+	# Live queries
+	Live:				string
+	Kill:				null
+
+	# Misc.
+	Version:			string
+	Use:				null
+	Let:				null
+	Unset:				null
+	Run:				literally anything
+
+If any of them fail, the reply has an .error property - and thus,
+has it's own response type with no .result
+
+This inconsistency is gonna spell my doom. -.-
+*/
 
 // A response with no content but an actual error.
 // Returned by everything, eventually, potentially.
@@ -47,21 +88,10 @@ type FatalErrorResponse = GenericResponse[interface{}]
 // this represents the direct (Surreal)SQL interface.
 type QueryResponse = GenericResponse[[]QueryResult]
 
-/*
-Select: array of objects
-Create: array of objects
-Insert: array of objects
-Merge: array of objects
-Insert Relation: Object
-Update: object
-Upsert: object
-Delete: object
-Relate: object
-*/
-
-
 // Response to these commands:
-//   select, create, insert, merge
+//
+//	select, create, insert, merge
+//
 // Contains one object for each affected entry.
 // This object IS NOT the same as a QueryResult; it's missing "header" data.
 // It should be an array response if multiple values are affected.
@@ -70,8 +100,10 @@ Relate: object
 type MultiNoSQLResponse = GenericResponse[[]st.Object]
 
 // Response to:
-//   update, upsert, delete
-//   (relate, insert_relation too but they are handled elsewhere)
+//
+//	update, upsert, delete
+//	(relate, insert_relation too but they are handled elsewhere)
+//
 // The same principals apply as above.
 type SingleNoSQLResponse = GenericResponse[st.Object]
 
@@ -79,7 +111,7 @@ type SingleNoSQLResponse = GenericResponse[st.Object]
 type LiveResponse = GenericResponse[string]
 
 // Response to the kill command, contains nothing.
-type KillResponse = GenericResponse[interface{}]]
+type KillResponse = GenericResponse[interface{}]
 
 // Response to the run command, can contain anything.
 // Output is dependant on the function.
@@ -103,8 +135,10 @@ type PatchResponse = GenericResponse[JsonPatchResult]
 type VersionResponse = GenericResponse[string]
 
 // Response to:
-//   signin, signup,
-//   authenticate, invalidate
+//
+//	signin, signup,
+//	authenticate, invalidate
+//
 // Contains a string or null
 type AuthResponse = GenericResponse[string]
 
