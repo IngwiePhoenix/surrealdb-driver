@@ -7,9 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
 
 	"github.com/gorilla/websocket"
+	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/api"
+	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/config"
 )
 
 // implements driver.Conn
@@ -17,8 +18,8 @@ type SurrealConn struct {
 	WSClient *websocket.Conn
 	Driver   *SurrealDriver
 	Logger   *slog.Logger
-	Caller   *SurrealCaller
-	creds    *CredentialConfig
+	Caller   *api.SurrealCaller
+	creds    *config.Credentials
 }
 
 var _ driver.Conn = (*SurrealConn)(nil)
@@ -30,13 +31,14 @@ var _ driver.Pinger = (*SurrealConn)(nil)
 
 // Execute directly on the underlying WebSockets connection by utilizing the
 // raw API objects.
-func (con *SurrealConn) execObj(obj *SurrealAPIRequest) (*SurrealAPIResponse, error) {
-	con.Driver.LogInfo("Conn:execObj start", obj)
-	if err := con.WSClient.WriteJSON(obj); err != nil {
+func (con *SurrealConn) execObj(req *api.Request) (any, error) {
+	con.Driver.LogInfo("Conn:execObj start", req)
+
+	if err := con.WSClient.WriteJSON(req); err != nil {
 		con.Driver.LogInfo("Conn:execObj, writeJSON error", err)
 		return nil, err
 	}
-	res := &SurrealAPIResponse{}
+
 	mtyp, msg, err := con.WSClient.ReadMessage()
 	if err != nil {
 		con.Driver.LogInfo("Conn:execObj, ReadMessage: ", err)
@@ -54,34 +56,26 @@ func (con *SurrealConn) execObj(obj *SurrealAPIRequest) (*SurrealAPIResponse, er
 		}
 	} else {
 		// And this is where all my troubble begins, and ends.
-		err := json.Unmarshal(msg, res)
-		con.Driver.LogInfo("Conn:execObj, ReadMessage, json.Unmarshal: ", err, string(msg))
-		if err != nil {
+		if res, err := IdentifyResponse(*req, msg); err != nil {
+			con.Driver.LogInfo("Conn:execObj, cannot unJSON message: ", err, string(msg))
 			return nil, err
-		}
-		if res.Error.Code != 0 {
-			return nil, errors.New(
-				strconv.FormatInt(res.Error.Code, 10) +
-					": " +
-					res.Error.Message,
-			)
-		} else if queryResult, ok := res.Result.([]interface{}); ok {
-			con.Driver.LogInfo("Conn:execObj possibly a problem: ", queryResult)
-			if queryResult, ok := queryResult[0].(map[string]interface{}); ok {
-				con.Driver.LogInfo("Conn:execObj MORE possibly a problem: ", queryResult)
-				if status, ok := queryResult["status"].(string); ok && status != "OK" {
-					errMsg := queryResult["result"].(string)
-					return nil, errors.New(status + ": " + errMsg)
-				}
+		} else {
+			switch res.(type) {
+			case api.FatalErrorResponse:
+				reqErr := res.(api.FatalErrorResponse).Error
+				con.Driver.LogInfo("Conn:execObj, fatal error: ", reqErr)
+				return nil, reqErr.ToError()
+			default:
+				con.Driver.LogInfo("Conn:execObj, done identifying: ", res)
+				return res, nil
 			}
 		}
 	}
-	con.Driver.LogInfo("Conn:execObj end: ", res)
-	return res, nil
+	panic("reached execObj(...) unexpectedly")
 }
 
 // Execute directly on the underlying WebSockets connection
-func (con *SurrealConn) execRaw(sql string, args map[string]interface{}) (*SurrealAPIResponse, error) {
+func (con *SurrealConn) execRaw(sql string, args map[string]interface{}) (any, error) {
 	con.Driver.LogInfo("Conn:execRaw start", sql, args)
 	res, err := con.execObj(con.Caller.CallQuery(sql, args))
 	return res, err
@@ -118,7 +112,7 @@ func (con *SurrealConn) performLogin() error {
 		return err
 	}
 	// Attempt to run a `use [ns, db]`. Strings are empty (thus "null") by default.
-	if con.creds.Method == AuthMethodDB || con.creds.Method == AuthMethodRoot {
+	if con.creds.Method == config.AuthMethodDB || con.creds.Method == config.AuthMethodRoot {
 		msg = con.Caller.CallUse(con.creds.Namespace, con.creds.Database)
 		res, err = con.execObj(msg)
 		if err != nil {

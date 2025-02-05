@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/gorilla/websocket"
+	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/config"
 )
 
 // implements driver.Driver
@@ -20,7 +21,7 @@ var _ driver.DriverContext = (*SurrealDriver)(nil)
 //var _ sql.DB = (*SurrealDriver)(nil)
 
 func (d *SurrealDriver) Open(address string) (driver.Conn, error) {
-	config, err := ParseUrl(address)
+	config, err := config.ParseUrl(address)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +41,7 @@ func (d *SurrealDriver) Open(address string) (driver.Conn, error) {
 
 // implements driver.DriverContext
 func (d *SurrealDriver) OpenConnector(address string) (driver.Connector, error) {
-	config, err := ParseUrl(address)
+	config, err := config.ParseUrl(address)
 	if err != nil {
 		return nil, err
 	}

@@ -6,11 +6,13 @@ import (
 	"errors"
 
 	"github.com/gorilla/websocket"
+	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/api"
+	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/config"
 )
 
 // implements driver.Connector
 type SurrealConnector struct {
-	Creds  *CredentialConfig
+	Creds  *config.Credentials
 	Dialer *websocket.Dialer
 	driver *SurrealDriver
 }
@@ -31,7 +33,7 @@ func (c *SurrealConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	con := &SurrealConn{
 		WSClient: conn,
 		Driver:   c.driver,
-		Caller:   MakeCaller(),
+		Caller:   api.MakeCaller(),
 		creds:    c.Creds,
 	}
 	if err = con.performLogin(); err != nil {

@@ -1,4 +1,4 @@
-package surrealdbdriver
+package config
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"net/url"
 )
 
-type CredentialConfig struct {
+type Credentials struct {
 	Username      string
 	Password      string
 	Database      string
@@ -16,10 +16,10 @@ type CredentialConfig struct {
 	Token         string
 	Method        AuthMethod
 	URL           *url.URL
-	extra         map[string]interface{}
+	Extra         map[string]interface{}
 }
 
-func (c *CredentialConfig) GetDBUrl() string {
+func (c *Credentials) GetDBUrl() string {
 	return fmt.Sprintf(
 		"%s://%s%s",
 		c.URL.Scheme,
@@ -28,12 +28,12 @@ func (c *CredentialConfig) GetDBUrl() string {
 	)
 }
 
-func ParseUrl(inputUrl string) (*CredentialConfig, error) {
+func ParseUrl(inputUrl string) (*Credentials, error) {
 	u, err := url.Parse(inputUrl)
 	if err != nil {
 		return nil, err
 	}
-	c := &CredentialConfig{}
+	c := &Credentials{}
 	q := u.Query()
 	if !q.Has("method") {
 		return nil, errors.New("no authentication method specified")
@@ -72,7 +72,7 @@ func ParseUrl(inputUrl string) (*CredentialConfig, error) {
 
 	if q.Has("extra") {
 		extraStr := q.Get("extra")
-		err := json.Unmarshal([]byte(extraStr), &(c.extra))
+		err := json.Unmarshal([]byte(extraStr), &(c.Extra))
 		if err != nil {
 			return nil, err
 		}

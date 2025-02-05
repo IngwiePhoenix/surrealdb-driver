@@ -4,14 +4,17 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
-	"sort"
+
+	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/api"
+	st "github.com/senpro-it/dsb-tool/extras/surrealdb-driver/surrealtypes"
 )
 
 // implements driver.Rows
 type SurrealRows struct {
 	conn      *SurrealConn
-	rawResult *SurrealAPIResponse
+	rawResult any
 	resultIdx int
+	batchIdx  int // api.BatchResponse
 }
 
 func (rows *SurrealRows) Close() error {
@@ -22,137 +25,189 @@ func (rows *SurrealRows) Close() error {
 }
 
 func (rows *SurrealRows) Columns() (cols []string) {
-	rows.conn.Driver.LogInfo("Rows:columns, start")
-	if value, ok := rows.rawResult.Result.([]interface{}); ok {
-		// This result set is in fact an array.
-		rows.conn.Driver.LogInfo("Rows:columns, []interface{}: ", value)
-		seen := map[string]bool{}
-		for _, entry := range value {
-			rows.conn.Driver.LogInfo("Rows:columns, iterating: ", entry)
-			realValue := entry.(map[string]interface{})
-			if unwrappedValue, ok := realValue["result"].(map[string]interface{}); ok {
-				for k := range unwrappedValue {
-					rows.conn.Driver.LogInfo("Rows:columns, 2nd level iteration: ", k)
-					if !seen[k] { // avoid dupes
-						seen[k] = true
-						cols = append(cols, k)
-					}
-				}
-			} else if _, ok := realValue["result"].(string); ok {
-				cols = []string{"value"}
+	getColsForOneResult := func(res api.QueryResult) (out []string) {
+		if entries, ok := res.Result.([]st.Object); ok {
+			// Sanity check: Is our current index in range?
+			if rows.resultIdx >= len(entries) {
+				panic("Columns() was called but resultIdx is out of range of entries")
 			}
-		}
-		rows.conn.Driver.LogInfo("Rows:columns, finished iteration: ", cols)
 
-		// HACK: stringmaps in go do not keep order. So I have to "make" one.
-		sort.Strings(cols)
-		rows.conn.Driver.LogInfo("Rows:columns, finished iteration (sorted): ", cols)
-		return cols
+			// This result set is in fact an array.
+			rows.conn.Driver.LogInfo("Rows:columns, is []st.Object: ", entries)
+			seen := map[string]bool{}
+			entry := entries[rows.resultIdx]
+			rows.conn.Driver.LogInfo("Rows:columns, []st.Object: ", entry)
+			for key := range entry {
+				if !seen[key] { // avoid dupes
+					rows.conn.Driver.LogInfo("Rows:columns []st.Object, saw key: ", key)
+					seen[key] = true
+					out = append(out, key)
+				}
+			}
+
+			rows.conn.Driver.LogInfo("Rows:columns, finished iteration: ", cols)
+			return out
+		}
+
+		if entry, ok := res.Result.(st.Object); ok {
+			// Sanity check: Is our current index in range?
+			if rows.resultIdx >= 1 {
+				panic("Columns() was called target is st.Object and resultIdx >= 1")
+			}
+
+			// Single object
+			rows.conn.Driver.LogInfo("Rows:columns, is st.Object: ", entry)
+			for key := range entry {
+				out = append(out, key)
+			}
+			return out
+		} else if list, ok := res.Result.(st.Set); ok {
+			if rows.resultIdx >= 1 {
+				panic("Columns() was called while target is st.Set but resultIdx >= 1")
+			}
+			// We return a list of strings...that simple.
+			for i := range list {
+				out = append(out, string(i))
+			}
+			return out
+		}
+
+		// Nothing else matched - so this has to be a singular result.
+		out = []string{"value"}
+		return out
 	}
-	panic("reached columns() unexpectedly")
+
+	handleQueryResp := func(resp api.QueryResponse) []string {
+		// THROW queries always come back in an array.
+		if resp.Result.Status != "OK" {
+			// No columns here
+			return []string{}
+		}
+
+		// QueryResponse is just a single response.
+		return getColsForOneResult(resp.Result)
+	}
+
+	switch rows.rawResult.(type) {
+	case api.QueryResponse:
+		q := rows.rawResult.(api.QueryResponse)
+		return handleQueryResp(q)
+
+	case api.BatchResponse:
+		resList := rows.rawResult.(api.BatchResponse)
+		if rows.batchIdx >= len(resList.Result) {
+			panic("Column() called on BatchResponse but rowIdx is out of range")
+		}
+		//q := resList[].Result
+		q := resList.Result[rows.batchIdx]
+		cols = handleQueryResp(q)
+		rows.batchIdx = rows.batchIdx + 1
+		return cols
+
+	// Technically not the output of a query,
+	// but this might come in handy.
+	case api.InfoResponse:
+		return []string{"info"}
+
+	case api.RelationResponse:
+		r := rows.rawResult.(api.RelationResponse)
+		cols = append(cols, []string{"id", "in", "out"}...)
+		for k := range r.Result.Values {
+			cols = append(cols, k)
+		}
+		return cols
+
+	default:
+		panic(fmt.Sprintf("tried to get columns for %T, which isn't supported", rows.rawResult))
+	}
 }
 
 func (rows *SurrealRows) Next(dest []driver.Value) error {
-	rows.conn.Driver.LogInfo("Rows:next start: ", fmt.Sprintf("%T", rows.rawResult.Result), rows.resultIdx)
-	defer rows.conn.Driver.LogInfo("Rows:finished: ", dest)
-	// SurrealDB returns all results, at all time, with no paging.
-	// That means we have to write the result back one by one.
-	// This, however, only works if the result IS an array.
-	// If it is not, then we kinda can't index it.
-	// So we have to run multiple strats.
-	if value, ok := rows.rawResult.Result.([]interface{}); ok {
-		// This result set is in fact an array.
-		rows.conn.Driver.LogInfo("Rows:next, []interface{}: ", value)
-		if rows.resultIdx >= len(value) {
-			return io.EOF
-		}
-		entry := value[rows.resultIdx]
-		rows.conn.Driver.LogInfo("Rows:next, current row: ", rows.resultIdx, entry)
-		realValue := entry.(map[string]interface{})
-		if unwrappedValue, ok := realValue["result"].(map[string]interface{}); ok {
+	handleResults := func(res api.QueryResult) error {
+
+		entryToDest := func(entry st.Object) error {
+			rows.conn.Driver.LogInfo("Rows:next, current row: ", rows.resultIdx, entry)
 			cols := rows.Columns()
 			for i, v := range cols {
 				rows.conn.Driver.LogInfo("Rows:next, 2nd level iteration: ", i, v)
-				dest[i] = unwrappedValue[v]
+				dest[i] = entry[v]
 			}
-		} else if unwrappedValue, ok := realValue["result"].(string); ok {
-			dest[0] = unwrappedValue
-		} else {
-			return fmt.Errorf("nothing to return; result is %T", realValue["result"])
+
+			// Technically an error won't really happen here but, just in case.
+			// I should probably consider using recover()...?
+			return nil
 		}
-		rows.conn.Driver.LogInfo("Rows:next, finished iteration: ", dest)
-		rows.resultIdx = rows.resultIdx + 1
-		return nil
+
+		if entries, ok := res.Result.([]st.Object); ok {
+			// This result set is in fact an array.
+			rows.conn.Driver.LogInfo("Rows:next, []interface{}: ", value)
+			if rows.resultIdx >= len(entries) {
+				return io.EOF
+			}
+
+			err := entryToDest(entries[rows.resultIdx])
+			rows.resultIdx = rows.resultIdx + 1
+			return err
+		}
+
+		if entry, ok := res.Result.(st.Object); ok {
+			// Single k-v object
+			if rows.resultIdx >= 1 {
+				return io.EOF
+			}
+			err := entryToDest(entry)
+			rows.resultIdx = rows.resultIdx + 1
+			return err
+		}
+
+		// Not an object, not an array - it's _just_ a value.
+		dest[0] = res.Result
 	}
-	/*
-		if value, ok := rows.rawResult.Result.([]SurrealQueryResponse); ok {
-			rows.conn.Driver.LogInfo("Rows:next, SurrealQueryResponse")
-			// Can be either a single or a multi...
-			if rows.resultIdx > len(value) {
-				return io.EOF
-			}
-			resultEntry := value[rows.resultIdx].Result.([]interface{})
-			var i int = 0
-			for _, v := range resultEntry {
-				dest[i] = v
-				i = i + 1
-			}
-			rows.resultIdx = rows.resultIdx + 1
-			return nil
+
+	switch rows.rawResult.(type) {
+	case api.QueryResponse:
+		qr := rows.rawResult.(api.QueryResponse).Result
+		return handleResults(qr)
+
+	case api.BatchResponse:
+		resList := rows.rawResult.(api.BatchResponse)
+		if rows.batchIdx >= len(resList) {
+			panic("Column() called on BatchResponse but rowIdx is out of range")
 		}
-		if value, ok := rows.rawResult.Result.(map[string]interface{}); ok {
-			rows.conn.Driver.LogInfo("Rows:next, map[string]interface{}")
-			// Single k-v response
-			if rows.resultIdx == 1 {
-				return io.EOF
-			}
-			var i int = 0
-			for _, v := range value {
-				dest[i] = v
-				i = i + 1
-			}
-			rows.resultIdx = rows.resultIdx + 1
-			return nil
-		}
-		if value, ok := rows.rawResult.Result.([]map[string]any); ok {
-			rows.conn.Driver.LogInfo("Rows:next, []map[string]interface{}")
-			// List of k-v responses
-			//if res, ok := value[rows.resultIdx]; ok {
-			if idx := rows.resultIdx; idx < len(value) && value[idx] != nil {
-				var i int = 0
-				for _, v := range value[idx] {
-					dest[i] = v
-					i = i + 1
-				}
-				rows.resultIdx = rows.resultIdx + 1
-				return nil
-			} else {
-				return io.EOF
+		qr := resList.Result[rows.batchIdx]
+		err := handleResults(qr)
+		rows.batchIdx = rows.batchIdx + 1
+		return err
+
+	case api.InfoResponse:
+		r := rows.rawResult.(api.InfoResponse)
+		dest[0] = r.Result
+		return nil
+
+	case api.RelationResponse:
+		r := rows.rawResult.(api.RelationResponse)
+		// We must fake column access...yay. o.o
+		rr := r.Result
+		cols := rows.Columns()
+		for i, colName := range cols {
+			switch colName {
+			case "id":
+				dest[i] = rr.ID
+			case "in":
+				dest[i] = rr.In
+			case "out":
+				dest[i] = rr.Out
+			default:
+				dest[i] = rr.Values[colName]
 			}
 		}
-		if value, ok := rows.rawResult.Result.([]string); ok {
-			rows.conn.Driver.LogInfo("Rows:next, []string")
-			// Multi-string response. Column is "values", so we just
-			// put all of them in there, immediately.
-			if rows.resultIdx == 1 {
-				return io.EOF
-			}
-			dest[0] = value
-			rows.resultIdx = rows.resultIdx + 1
-			return nil
-		}
-		if value, ok := rows.rawResult.Result.(string); ok {
-			rows.conn.Driver.LogInfo("Rows:next, string")
-			// Single string response, column is "value"
-			if rows.resultIdx == 1 {
-				return io.EOF
-			}
-			dest[0] = value
-			rows.resultIdx = rows.resultIdx + 1
-			return nil
-		}
-	*/
-	rows.conn.Driver.LogInfo("Rows:next, wtf: ", rows.rawResult.Result)
+		// TODO: There's better ways to just ignore this...
+		return nil
+
+	default:
+		panic(fmt.Sprintf("tried to call Next() for %T, which isn't supported", rows.rawResult))
+	}
+
 	panic("reached end of next() unexpectedly")
 }
 
