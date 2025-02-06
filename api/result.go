@@ -2,16 +2,15 @@ package api
 
 import (
 	"encoding/json"
-	"time"
 
 	st "github.com/senpro-it/dsb-tool/extras/surrealdb-driver/surrealtypes"
 	"github.com/wI2L/jsondiff"
 )
 
 type QueryResult struct {
-	Status string        `json:"status"`
-	Time   time.Duration `json:"time"`
-	Result interface{}   `json:"result"`
+	Status string      `json:"status"`
+	Time   st.Duration `json:"time"`
+	Result interface{} `json:"result"`
 }
 
 // QueryResponse.Result[n].[ T QueryResultTypes ]

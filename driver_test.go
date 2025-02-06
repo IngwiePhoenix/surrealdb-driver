@@ -30,7 +30,7 @@ func TestDriverCreation(t *testing.T) {
 		}
 	})
 
-	/*t.Run("RunInfoAsQuery", func(t *testing.T) {
+	t.Run("RunInfoAsQuery", func(t *testing.T) {
 		t.Log("grab info for root")
 		res, err := db.Query("info for root;")
 		t.Log("error after statement: ", err)
@@ -42,12 +42,13 @@ func TestDriverCreation(t *testing.T) {
 			for res.Next() {
 				var accesses, namespaces, nodes, users any
 				err := res.Scan(&accesses, &namespaces, &nodes, &users)
-				t.Log(accesses, namespaces, nodes, users)
+				t.Log("data: ", accesses, namespaces, nodes, users)
 				t.Log(err)
 				if err != nil {
 					break
 				}
 			}
+			t.Log("Loop done")
 		} else {
 			t.Error("An error occured: ", err)
 		}
@@ -64,7 +65,7 @@ func TestDriverCreation(t *testing.T) {
 			for res.Next() {
 				var foo string
 				err := res.Scan(&foo)
-				t.Log(foo)
+				t.Log("returned value is: ", foo)
 				t.Log(err)
 				if err != nil {
 					break
@@ -85,9 +86,10 @@ func TestDriverCreation(t *testing.T) {
 
 			for res.Next() {
 				var life string
-				var testWords []interface{}
+				var testWords any
 				err := res.Scan(&life, &testWords)
 				t.Log("Results from scan:", life, testWords)
+				t.Logf("type: %T", testWords)
 				t.Log(err)
 				if err != nil {
 					break
@@ -99,46 +101,23 @@ func TestDriverCreation(t *testing.T) {
 	})
 
 	t.Run("ThrowOnPurpose", func(t *testing.T) {
-		_, err := db.Query("THROW \"aqua\"")
+		out, err := db.Query("THROW \"aqua\"")
 		t.Log("error after statement: ", err)
-		if err.Error() != "ERR: An error occurred: aqua" {
+		t.Logf("%T", out)
+		if err.Error() != "An error occurred: aqua" {
 			t.Fatal("Wrong error message:", err)
 		}
 	})
 
 	t.Run("InfoQueryToStruct", func(t *testing.T) {
-		rows, err := db.Query("INFO FOR DB;")
-		if err != nil {
+		row := db.QueryRow("INFO FOR DB;")
+		if row.Err() != nil {
 			t.Fatal(err.Error())
 		}
-		cols, err := rows.Columns()
-		if err != nil {
-			t.Fatal(err.Error())
-		}
-		idx := driver.IndexOfString(cols, "tables")
-		if idx == -1 {
-			t.Error("could not determine tables column")
-			return
-		}
-		for rows.Next() {
-			valuePtrs := make([]interface{}, len(cols))
-			values := make([]interface{}, len(cols))
-			for i := range values {
-				valuePtrs[i] = &values[i]
-			}
-			rows.Scan(valuePtrs...)
-			results := map[string]map[string]interface{}{}
-			for i, c := range cols {
-				results[c] = values[i].(map[string]interface{})
-			}
-			t.Log("valuePtrs: ", valuePtrs)
-			t.Log("values: ", values)
-			t.Log("Columns: ", cols)
-			t.Log("Table Column index: ", idx)
-			t.Log("Tables: ", values[idx])
-			t.Logf("results['tables'] = %T", results["tables"])
-			t.Log(results["tables"])
-		}
-		//t.Log("Tables: ", info)
-	})*/
+		// Blind shot straight into nowhere!
+		var a, b, c, d, e, f, g, h interface{}
+		row.Scan(&a, &b, &c, &d, &e, &f, &g, &h)
+		t.Log(a, b, c, d, e, f, g, h)
+		t.Log(row)
+	})
 }

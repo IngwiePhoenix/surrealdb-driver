@@ -81,7 +81,7 @@ This inconsistency is gonna spell my doom. -.-
 // A response with no content but an actual error.
 // Returned by everything, eventually, potentially.
 // .error is ONLY set IF an error exists/has occured
-type FatalErrorResponse = GenericResponse[interface{}]
+type FatalErrorResponse = GenericResponse[error]
 
 // Response to the query command.
 // Guaranteed to always be an array (Rust Vec<(Database)::Value>)
@@ -111,7 +111,7 @@ type SingleNoSQLResponse = GenericResponse[st.Object]
 type LiveResponse = GenericResponse[string]
 
 // Response to the kill command, contains nothing.
-type KillResponse = GenericResponse[interface{}]
+type KillResponse = GenericResponse[st.Null]
 
 // Response to the run command, can contain anything.
 // Output is dependant on the function.
@@ -145,5 +145,5 @@ type AuthResponse = GenericResponse[string]
 // Response to the info command, may contain an object.
 type InfoResponse = GenericResponse[st.Object]
 
-// Response to let and unset. Always null or an error.
+// Response to let, unset and use. Always null or an error.
 type VarRequest = GenericResponse[interface{}]

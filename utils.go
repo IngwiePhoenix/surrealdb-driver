@@ -112,7 +112,12 @@ func IdentifyResponse(req api.Request, data []byte) (any, error) {
 
 	// Grab ID
 	id := req.ID
-	rawData := *initial.Result
+	var rawData json.RawMessage
+	if initial.Result == nil {
+		rawData = json.RawMessage{}
+	} else {
+		rawData = *initial.Result
+	}
 
 	switch req.Method {
 	case "version":
@@ -195,6 +200,19 @@ func IdentifyResponse(req api.Request, data []byte) (any, error) {
 		return api.PatchResponse{
 			Id:     id,
 			Result: &out,
+		}, nil
+
+	case "signin", "signup":
+		token := string(rawData)
+		return api.AuthResponse{
+			Id:     id,
+			Result: &token,
+		}, nil
+
+	case "let", "unset", "use":
+		return api.VarRequest{
+			Id:     id,
+			Result: nil,
 		}, nil
 	}
 

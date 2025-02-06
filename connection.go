@@ -56,19 +56,31 @@ func (con *SurrealConn) execObj(req *api.Request) (any, error) {
 		}
 	} else {
 		// And this is where all my troubble begins, and ends.
-		if res, err := IdentifyResponse(*req, msg); err != nil {
+		res, err := IdentifyResponse(*req, msg)
+		if err != nil {
 			con.Driver.LogInfo("Conn:execObj, cannot unJSON message: ", err, string(msg))
 			return nil, err
 		} else {
+			con.Driver.LogInfo("Conn:execObj, received: ", string(msg), res)
+			con.Driver.LogInfo("Conn:execObj, type: ", fmt.Sprintf("%T", res))
+			queryErrors := []error{}
 			switch res.(type) {
+			case api.QueryResponse:
+				qres := res.(api.QueryResponse)
+				resList := *qres.Result
+				for _, resEntry := range resList {
+					if resEntry.Status != "OK" {
+						errMsg := resEntry.Result.(string)
+						queryErrors = append(queryErrors, errors.New(errMsg))
+					}
+				}
 			case api.FatalErrorResponse:
 				reqErr := res.(api.FatalErrorResponse).Error
 				con.Driver.LogInfo("Conn:execObj, fatal error: ", reqErr)
 				return nil, reqErr.ToError()
-			default:
-				con.Driver.LogInfo("Conn:execObj, done identifying: ", res)
-				return res, nil
 			}
+			con.Driver.LogInfo("Conn:execObj, done identifying: ", res)
+			return res, errors.Join(queryErrors...)
 		}
 	}
 	panic("reached execObj(...) unexpectedly")

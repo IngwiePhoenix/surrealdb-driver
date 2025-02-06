@@ -2,6 +2,7 @@ package surrealdbdriver
 
 import (
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -112,13 +113,22 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 		if rows.resultIdx >= len(objs) {
 			return io.EOF
 		}
-		obj := objs[rows.resultIdx].Result
+		qres := objs[rows.resultIdx]
+		obj := qres.Result
+		defer func() {
+			rows.resultIdx = rows.resultIdx + 1
+		}()
+		if qres.Status != "OK" {
+			msg := obj.(string)
+			return errors.New(msg)
+		}
 		if r, ok := obj.(st.Object); ok {
 			return handleResult(r)
 		} else if r, ok := obj.([]interface{}); ok {
 			// .Columns() has returned "valies", so do we.
 			// Each column is just the index number, so we return the values.
 			for i, v := range r {
+				// TODO: Can we add more type info...?
 				dest[i] = v
 			}
 			return nil
@@ -152,6 +162,8 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 				dest[i] = r.Values[colName]
 			}
 		}
+		// Increment to trigger the other short-circuits
+		rows.resultIdx = rows.resultIdx + 1
 		return nil
 
 	// TODO: All the other response types...

@@ -37,7 +37,8 @@ type Float = sql.NullFloat64
 
 // ### Date and time
 type DateTime = sql.NullTime
-type Duration = sql.Null[time.Duration]
+
+//type Duration = sql.Null[time.Duration]
 
 // ### Objects
 type Geometry = sql.Null[geojson.Geometry]
@@ -108,6 +109,30 @@ func (bf *Decimal) UnmarshalJSON(data []byte) error {
 	}
 	bf.Float = f
 	return nil
+}
+
+type Duration struct {
+	time.Duration
+}
+
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	str := string(b)
+	if str == "null" {
+		d.Duration = 0
+		return nil
+	}
+
+	str = str[1 : len(str)-1]
+
+	duration, err := time.ParseDuration(str)
+	if err != nil {
+		return err
+	}
+	d.Duration = duration
+	return nil
+}
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.Duration.String())
 }
 
 type Option[T NumberTypes] struct {

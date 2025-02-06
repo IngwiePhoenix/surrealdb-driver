@@ -35,23 +35,23 @@ func (r *SurrealResult) LastInsertId() (int64, error) {
 			message := res.Result.(string)
 			return 0, errors.New(message)
 		}
-
-		if out, ok := res.Result.([]struct {
-			Id st.RecordID `json:"id"`
-		}); ok && len(out) > 0 {
-			// - It's an array. (This should be the default for most queries.)
-			// - Elements have an ID field
-			// - There is at least 1 element
-			// Pick the literally last entry
-			idhash := stringToHash(out[len(out)-1].Id.String())
-			return int64(idhash), nil
-		} else if out, ok := res.Result.(struct {
-			Id st.RecordID `json:"id"`
-		}); ok {
-			// - It's a single object. (It was probably a custom query...)
-			// - It has an id
-			idhash := stringToHash(out.Id.String())
-			return int64(idhash), nil
+		if r, ok := res.Result.(st.Object); ok {
+			// Do we even _have_ an ID?
+			idStr, ok := r["id"].(string)
+			if !ok {
+				// No id, bail.
+				return -1, nil
+			}
+			rid, err := st.NewRecordIDFromString(idStr)
+			if err != nil {
+				return 0, err
+			}
+			idhash := int64(stringToHash(rid.String()))
+			return idhash, nil
+		} else {
+			// Ok, so this is likely a random query.
+			// What the fuck am I supposed to do here?
+			return -1, nil
 		}
 
 	case api.SingleNoSQLResponse:
@@ -87,7 +87,7 @@ func (r *SurrealResult) LastInsertId() (int64, error) {
 	}
 
 	// Nothing else matched - so, we got nothing.
-	panic("unexpectedly reached end of LastInsertId()")
+	panic("unexpectedly reached end of LastInsertId() with " + fmt.Sprintf("%T", r.RawResult))
 }
 
 func (r *SurrealResult) RowsAffected() (int64, error) {
