@@ -1,4 +1,4 @@
-# SurrealDB <-> Go: The only `database/sql` (so far)!
+# SurrealDB <-> Go: The only `database/sql` compliant SurrealDB driver (so far)!
 
 > [!IMPORTANT]  
 > This driver is not entirely stable just yet. Beware, there do be dragons amongst some type-asserts. ;)
