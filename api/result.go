@@ -58,5 +58,5 @@ type JsonPatchRepr = jsondiff.Operation
 type JsonPatchResult = []JsonPatchRepr
 
 type ResultTypes interface {
-	SimpleResult | ArrayResult | QueryResult | BatchResult
+	SimpleResult | ArrayResult | QueryResult | JsonPatchResult | RelationResult
 }

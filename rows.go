@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
+	"sort"
+	"strconv"
 
 	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/api"
 	st "github.com/senpro-it/dsb-tool/extras/surrealdb-driver/surrealtypes"
@@ -14,7 +16,6 @@ type SurrealRows struct {
 	conn      *SurrealConn
 	rawResult any
 	resultIdx int
-	batchIdx  int // api.BatchResponse
 }
 
 func (rows *SurrealRows) Close() error {
@@ -25,97 +26,65 @@ func (rows *SurrealRows) Close() error {
 }
 
 func (rows *SurrealRows) Columns() (cols []string) {
-	getColsForOneResult := func(res api.QueryResult) (out []string) {
-		if entries, ok := res.Result.([]st.Object); ok {
-			// Sanity check: Is our current index in range?
-			if rows.resultIdx >= len(entries) {
-				panic("Columns() was called but resultIdx is out of range of entries")
-			}
-
-			// This result set is in fact an array.
-			rows.conn.Driver.LogInfo("Rows:columns, is []st.Object: ", entries)
-			seen := map[string]bool{}
-			entry := entries[rows.resultIdx]
-			rows.conn.Driver.LogInfo("Rows:columns, []st.Object: ", entry)
-			for key := range entry {
-				if !seen[key] { // avoid dupes
-					rows.conn.Driver.LogInfo("Rows:columns []st.Object, saw key: ", key)
-					seen[key] = true
-					out = append(out, key)
-				}
-			}
-
-			rows.conn.Driver.LogInfo("Rows:columns, finished iteration: ", cols)
-			return out
+	handleSingleQueryObj := func(r st.Object) []string {
+		out := []string{}
+		for k := range r {
+			out = append(out, k)
 		}
-
-		if entry, ok := res.Result.(st.Object); ok {
-			// Sanity check: Is our current index in range?
-			if rows.resultIdx >= 1 {
-				panic("Columns() was called target is st.Object and resultIdx >= 1")
-			}
-
-			// Single object
-			rows.conn.Driver.LogInfo("Rows:columns, is st.Object: ", entry)
-			for key := range entry {
-				out = append(out, key)
-			}
-			return out
-		} else if list, ok := res.Result.(st.Set); ok {
-			if rows.resultIdx >= 1 {
-				panic("Columns() was called while target is st.Set but resultIdx >= 1")
-			}
-			// We return a list of strings...that simple.
-			for i := range list {
-				out = append(out, string(i))
-			}
-			return out
-		}
-
-		// Nothing else matched - so this has to be a singular result.
-		out = []string{"value"}
+		sort.Strings(out)
 		return out
-	}
-
-	handleQueryResp := func(resp api.QueryResponse) []string {
-		// THROW queries always come back in an array.
-		if resp.Result.Status != "OK" {
-			// No columns here
-			return []string{}
-		}
-
-		// QueryResponse is just a single response.
-		return getColsForOneResult(resp.Result)
 	}
 
 	switch rows.rawResult.(type) {
 	case api.QueryResponse:
-		q := rows.rawResult.(api.QueryResponse)
-		return handleQueryResp(q)
-
-	case api.BatchResponse:
-		resList := rows.rawResult.(api.BatchResponse)
-		if rows.batchIdx >= len(resList.Result) {
-			panic("Column() called on BatchResponse but rowIdx is out of range")
+		res := rows.rawResult.(api.QueryResponse)
+		currId := rows.resultIdx
+		if currId > len(*res.Result) {
+			// Should we panic?
+			return []string{}
 		}
-		//q := resList[].Result
-		q := resList.Result[rows.batchIdx]
-		cols = handleQueryResp(q)
-		rows.batchIdx = rows.batchIdx + 1
-		return cols
+		currRow := (*res.Result)[currId]
+		if r, ok := currRow.Result.(st.Object); ok {
+			return handleSingleQueryObj(r)
+		} else if r, ok := currRow.Result.([]interface{}); ok {
+			// Query that has a non-object array response.
+			// Possibly something like "return [1, 2];"
+			// Best to tread it basic
+			for k := range r {
+				cols = append(cols, strconv.Itoa(k))
+			}
+			return cols
+		} else {
+			// Assume a primitive
+			return []string{"value"}
+		}
 
 	// Technically not the output of a query,
 	// but this might come in handy.
 	case api.InfoResponse:
-		return []string{"info"}
+		// Contains an object, so grab keys.
+		// Also prevent overspin
+		if rows.resultIdx > 0 {
+			panic("attempting to over-index an InfoResponse in Columns")
+		}
+		res := rows.rawResult.(api.InfoResponse)
+		obj := res.Result
+		return handleSingleQueryObj(*obj)
 
 	case api.RelationResponse:
-		r := rows.rawResult.(api.RelationResponse)
+		if rows.resultIdx > 0 {
+			panic("attempting to over-index a RelationResponse in Columns")
+		}
+		res := rows.rawResult.(api.RelationResponse)
 		cols = append(cols, []string{"id", "in", "out"}...)
-		for k := range r.Result.Values {
+		obj := *res.Result
+		for k := range obj.Values {
 			cols = append(cols, k)
 		}
+		sort.Strings(cols)
 		return cols
+
+	// TODO: Every other response kind...
 
 	default:
 		panic(fmt.Sprintf("tried to get columns for %T, which isn't supported", rows.rawResult))
@@ -123,61 +92,41 @@ func (rows *SurrealRows) Columns() (cols []string) {
 }
 
 func (rows *SurrealRows) Next(dest []driver.Value) error {
-	handleResults := func(res api.QueryResult) error {
-
-		entryToDest := func(entry st.Object) error {
-			rows.conn.Driver.LogInfo("Rows:next, current row: ", rows.resultIdx, entry)
-			cols := rows.Columns()
-			for i, v := range cols {
-				rows.conn.Driver.LogInfo("Rows:next, 2nd level iteration: ", i, v)
-				dest[i] = entry[v]
-			}
-
-			// Technically an error won't really happen here but, just in case.
-			// I should probably consider using recover()...?
-			return nil
+	handleResult := func(entry st.Object) error {
+		rows.conn.Driver.LogInfo("Rows:next, current row: ", rows.resultIdx, entry)
+		cols := rows.Columns()
+		for i, v := range cols {
+			rows.conn.Driver.LogInfo("Rows:next, 2nd level iteration: ", i, v)
+			dest[i] = entry[v]
 		}
 
-		if entries, ok := res.Result.([]st.Object); ok {
-			// This result set is in fact an array.
-			rows.conn.Driver.LogInfo("Rows:next, []interface{}: ", value)
-			if rows.resultIdx >= len(entries) {
-				return io.EOF
-			}
-
-			err := entryToDest(entries[rows.resultIdx])
-			rows.resultIdx = rows.resultIdx + 1
-			return err
-		}
-
-		if entry, ok := res.Result.(st.Object); ok {
-			// Single k-v object
-			if rows.resultIdx >= 1 {
-				return io.EOF
-			}
-			err := entryToDest(entry)
-			rows.resultIdx = rows.resultIdx + 1
-			return err
-		}
-
-		// Not an object, not an array - it's _just_ a value.
-		dest[0] = res.Result
+		// Technically an error won't really happen here but, just in case.
+		// I should probably consider using recover()...?
+		return nil
 	}
 
 	switch rows.rawResult.(type) {
 	case api.QueryResponse:
-		qr := rows.rawResult.(api.QueryResponse).Result
-		return handleResults(qr)
-
-	case api.BatchResponse:
-		resList := rows.rawResult.(api.BatchResponse)
-		if rows.batchIdx >= len(resList) {
-			panic("Column() called on BatchResponse but rowIdx is out of range")
+		res := rows.rawResult.(api.QueryResponse)
+		objs := *res.Result
+		if rows.resultIdx >= len(objs) {
+			return io.EOF
 		}
-		qr := resList.Result[rows.batchIdx]
-		err := handleResults(qr)
-		rows.batchIdx = rows.batchIdx + 1
-		return err
+		obj := objs[rows.resultIdx].Result
+		if r, ok := obj.(st.Object); ok {
+			return handleResult(r)
+		} else if r, ok := obj.([]interface{}); ok {
+			// .Columns() has returned "valies", so do we.
+			// Each column is just the index number, so we return the values.
+			for i, v := range r {
+				dest[i] = v
+			}
+			return nil
+		} else {
+			// .Columns() has returned "value"
+			dest[0] = obj
+			return nil
+		}
 
 	case api.InfoResponse:
 		r := rows.rawResult.(api.InfoResponse)
@@ -185,30 +134,33 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 		return nil
 
 	case api.RelationResponse:
-		r := rows.rawResult.(api.RelationResponse)
-		// We must fake column access...yay. o.o
-		rr := r.Result
+		if rows.resultIdx > 0 {
+			panic("attempting to over-index an InfoResponse in Columns")
+		}
+		res := rows.rawResult.(api.RelationResponse)
+		r := *res.Result
 		cols := rows.Columns()
 		for i, colName := range cols {
 			switch colName {
 			case "id":
-				dest[i] = rr.ID
+				dest[i] = r.ID
 			case "in":
-				dest[i] = rr.In
+				dest[i] = r.In
 			case "out":
-				dest[i] = rr.Out
+				dest[i] = r.Out
 			default:
-				dest[i] = rr.Values[colName]
+				dest[i] = r.Values[colName]
 			}
 		}
-		// TODO: There's better ways to just ignore this...
 		return nil
+
+	// TODO: All the other response types...
 
 	default:
 		panic(fmt.Sprintf("tried to call Next() for %T, which isn't supported", rows.rawResult))
 	}
 
-	panic("reached end of next() unexpectedly")
+	//panic("reached end of next() unexpectedly")
 }
 
 /*

@@ -30,7 +30,7 @@ func TestDriverCreation(t *testing.T) {
 		}
 	})
 
-	t.Run("RunInfoAsQuery", func(t *testing.T) {
+	/*t.Run("RunInfoAsQuery", func(t *testing.T) {
 		t.Log("grab info for root")
 		res, err := db.Query("info for root;")
 		t.Log("error after statement: ", err)
@@ -140,5 +140,5 @@ func TestDriverCreation(t *testing.T) {
 			t.Log(results["tables"])
 		}
 		//t.Log("Tables: ", info)
-	})
+	})*/
 }

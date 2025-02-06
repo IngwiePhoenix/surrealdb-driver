@@ -92,11 +92,8 @@ func assertJsonType(data json.RawMessage) string {
 
 // Im so dead bro x.x
 func IdentifyResponse(req api.Request, data []byte) (any, error) {
-	var initial struct {
-		Id     string          `json:"id"`
-		Result json.RawMessage `json:"result"`
-		Error  interface{}     `json:"error"`
-	}
+	// Create a raw response and make sure it's not empty
+	initial := api.GenericResponse[json.RawMessage]{}
 
 	if err := json.Unmarshal(data, &initial); err != nil {
 		// Failed to decode initial message
@@ -114,156 +111,93 @@ func IdentifyResponse(req api.Request, data []byte) (any, error) {
 	}
 
 	// Grab ID
-	id, err := st.NewRecordIDFromString(initial.Id)
-	if err != nil {
-		return nil, err
-	}
+	id := req.ID
+	rawData := *initial.Result
 
 	switch req.Method {
 	case "version":
+		version := string(rawData)
 		return api.VersionResponse{
 			Id:     id,
-			Result: string(initial.Result), // <- cheat.
+			Result: &version, // <- cheat.
 		}, nil
 
 	case "info":
 		// Only needed for record authentication (AuthTypeRecord)
 		// It is always a single, simple object.
 		out := st.Object{}
-		err := json.Unmarshal(initial.Result, &out)
+		err := json.Unmarshal(rawData, &out)
 		if err != nil {
 			return nil, err
 		}
 		return api.InfoResponse{
 			Id:     id,
-			Result: out,
+			Result: &out,
 		}, nil
 
-	case "select", "query", "insert", "create", "update", "upsert", "merge", "delete":
-		// .result = object | []object
-		// Either QueryResponse or BatchResponse
-		vType := assertJsonType(initial.Result)
-		switch vType {
-		case "object":
-			result := api.QueryResult{}
-			if err := json.Unmarshal(initial.Result, &result); err != nil {
-				return nil, err
-			}
-			return api.QueryResponse{
-				Id:     id,
-				Result: result,
-			}, nil
-
-		case "array":
-			result := api.BatchResult{}
-			if err := json.Unmarshal(initial.Result, &result); err != nil {
-				return nil, err
-			}
-			return api.BatchResponse{
-				Id:     id,
-				Result: result,
-			}, nil
-
-		// Technically, this should never happen.
-		// But, I will write it out here and possibly reuse it later.
-		// Especially when processing a single-value response.
-		// That said, a valid query is also `RETURN 1;` - which, in itself,
-		// would _also_ be considered a query response.
-		// Therefore, while this _shouldn't_ be neccessary, I'd rather
-		// have that present and available in the case that it _does_ happen.
-		// Lord knows what dem database peeps do be doin' owo
-		case "null":
-			return api.NullResponse{
-				Id:     id,
-				Result: st.Null{}, // I actually should have a method for this. o.o"
-			}, nil
-
-		case "boolean":
-			b := st.Bool{}
-			err := json.Unmarshal(initial.Result, &b)
-			if err != nil {
-				return nil, err
-			}
-			return api.GenericResponse[st.Bool]{
-				Id:     id,
-				Result: b,
-			}, nil
-
-		case "string":
-			b := st.String{}
-			err := json.Unmarshal(initial.Result, &b)
-			if err != nil {
-				return nil, err
-			}
-			return api.GenericResponse[st.String]{
-				Id:     id,
-				Result: b,
-			}, nil
-
-		case "number":
-			// This is where type hints as per CBOR would have been super useful.
-			// However, I doubt we'd get complex numbers in a single-value response.
-			// ...right?
-			numstr := strings.TrimSpace(string(initial.Result))
-			dots := strings.Count(numstr, ".")
-			switch dots {
-			case 0:
-				// int
-				var i int
-				return api.GenericResponse[st.Int]{
-					Id:     id,
-					Result: st.Int{V: i},
-				}, err
-			case 1:
-				var f float64
-				err := json.Unmarshal(initial.Result, &f)
-				if err != nil {
-					return nil, err
-				}
-				return api.GenericResponse[st.Float]{
-					Id:     id,
-					Result: st.Float{Float64: f},
-				}, nil
-			default:
-				// ...got to be complex. oh no. Let's pray this works.
-				var c st.Decimal
-				err := json.Unmarshal(initial.Result, &c)
-				if err != nil {
-					return nil, err
-				}
-				return api.GenericResponse[st.Decimal]{
-					Id:     id,
-					Result: c,
-				}, nil
-			}
-
-		default:
-			// aka. "unknown". This shouldn't happen.
-			panic("received invalid JSON assertation \"" + vType + "\"")
+	case "query":
+		out := []api.QueryResult{}
+		err := json.Unmarshal(rawData, &out)
+		if err != nil {
+			return nil, err
 		}
+		return api.QueryResponse{
+			Id:     id,
+			Result: &out,
+		}, nil
 
+	case "graphql":
+		panic("Not implemented")
+
+	// Process NoSQL/CRUD operations
+	// - Array of object returns
+	case "select", "create", "insert", "merge":
+		objs := []st.Object{}
+		err := json.Unmarshal(rawData, &objs)
+		if err != nil {
+			return nil, err
+		}
+		return api.MultiNoSQLResponse{
+			Id:     id,
+			Result: &objs,
+		}, nil
+
+	// - Single object return
+	case "update", "upsert", "delete":
+		obj := st.Object{}
+		err := json.Unmarshal(rawData, &obj)
+		if err != nil {
+			return nil, err
+		}
+		return api.SingleNoSQLResponse{
+			Id:     id,
+			Result: &obj,
+		}, nil
+
+	// - Special: relations
 	case "relate", "insert_relation":
 		out := api.RelationResult{}
-		err := json.Unmarshal(initial.Result, &out)
+		err := json.Unmarshal(rawData, &out)
 		if err != nil {
 			return nil, err
 		}
 		return api.RelationResponse{
 			Id:     id,
-			Result: out,
+			Result: &out,
 		}, nil
 
 	case "patch":
 		out := api.JsonPatchResult{}
-		err := json.Unmarshal(initial.Result, &out)
+		err := json.Unmarshal(rawData, &out)
 		if err != nil {
 			return nil, err
 		}
 		return api.PatchResponse{
 			Id:     id,
-			Result: out,
+			Result: &out,
 		}, nil
 	}
+
 	panic("reached end of IdentifyResponse(...) unexpectedly")
 }
 
@@ -296,3 +230,109 @@ func countRows(res api.QueryResult) (int64, error) {
 
 	return 0, errors.New("there was nothing to count...?")
 }
+
+/*
+// IDK what to do with this, so I'll leave it here.
+func handleSingleValueResponse(raw json.RawMessage) any {
+	// old impl
+	vType := assertJsonType(raw)
+	switch vType {
+	case "object":
+		result := api.QueryResult{}
+		if err := json.Unmarshal(initial.Result, &result); err != nil {
+			return nil, err
+		}
+		return api.QueryResponse{
+			Id:     id,
+			Result: result,
+		}, nil
+
+	case "array":
+		result := api.BatchResult{}
+		if err := json.Unmarshal(initial.Result, &result); err != nil {
+			return nil, err
+		}
+		return api.BatchResponse{
+			Id:     id,
+			Result: result,
+		}, nil
+
+	// Technically, this should never happen.
+	// But, I will write it out here and possibly reuse it later.
+	// Especially when processing a single-value response.
+	// That said, a valid query is also `RETURN 1;` - which, in itself,
+	// would _also_ be considered a query response.
+	// Therefore, while this _shouldn't_ be neccessary, I'd rather
+	// have that present and available in the case that it _does_ happen.
+	// Lord knows what dem database peeps do be doin' owo
+	case "null":
+		return api.NullResponse{
+			Id:     id,
+			Result: st.Null{}, // I actually should have a method for this. o.o"
+		}, nil
+
+	case "boolean":
+		b := st.Bool{}
+		err := json.Unmarshal(initial.Result, &b)
+		if err != nil {
+			return nil, err
+		}
+		return api.GenericResponse[st.Bool]{
+			Id:     id,
+			Result: b,
+		}, nil
+
+	case "string":
+		b := st.String{}
+		err := json.Unmarshal(initial.Result, &b)
+		if err != nil {
+			return nil, err
+		}
+		return api.GenericResponse[st.String]{
+			Id:     id,
+			Result: b,
+		}, nil
+
+	case "number":
+		// This is where type hints as per CBOR would have been super useful.
+		// However, I doubt we'd get complex numbers in a single-value response.
+		// ...right?
+		numstr := strings.TrimSpace(string(initial.Result))
+		dots := strings.Count(numstr, ".")
+		switch dots {
+		case 0:
+			// int
+			var i int
+			return api.GenericResponse[st.Int]{
+				Id:     id,
+				Result: st.Int{V: i},
+			}, err
+		case 1:
+			var f float64
+			err := json.Unmarshal(initial.Result, &f)
+			if err != nil {
+				return nil, err
+			}
+			return api.GenericResponse[st.Float]{
+				Id:     id,
+				Result: st.Float{Float64: f},
+			}, nil
+		default:
+			// ...got to be complex. oh no. Let's pray this works.
+			var c st.Decimal
+			err := json.Unmarshal(initial.Result, &c)
+			if err != nil {
+				return nil, err
+			}
+			return api.GenericResponse[st.Decimal]{
+				Id:     id,
+				Result: c,
+			}, nil
+		}
+
+	default:
+		// aka. "unknown". This shouldn't happen.
+		panic("received invalid JSON assertation \"" + vType + "\"")
+	}
+}
+*/
