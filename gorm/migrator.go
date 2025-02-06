@@ -1,7 +1,7 @@
 package gorm
 
 import (
-	driver "github.com/senpro-it/dsb-tool/extras/surrealdb-driver"
+	driver "github.com/IngwiePhoenix/surrealdb-driver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/migrator"

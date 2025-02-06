@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/config"
+	"github.com/IngwiePhoenix/surrealdb-driver/config"
 	"github.com/wI2L/jsondiff"
 )
 

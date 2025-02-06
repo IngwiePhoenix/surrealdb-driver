@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strconv"
 
-	st "github.com/senpro-it/dsb-tool/extras/surrealdb-driver/surrealtypes"
+	st "github.com/IngwiePhoenix/surrealdb-driver/surrealtypes"
 )
 
 type ErrorDetails struct {

@@ -5,7 +5,7 @@ import (
 	"log"
 	"testing"
 
-	driver "github.com/senpro-it/dsb-tool/extras/surrealdb-driver"
+	driver "github.com/IngwiePhoenix/surrealdb-driver"
 )
 
 func TestDriverCreation(t *testing.T) {

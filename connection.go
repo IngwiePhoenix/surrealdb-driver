@@ -9,8 +9,8 @@ import (
 	"log/slog"
 
 	"github.com/gorilla/websocket"
-	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/api"
-	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/config"
+	"github.com/IngwiePhoenix/surrealdb-driver/api"
+	"github.com/IngwiePhoenix/surrealdb-driver/config"
 )
 
 // implements driver.Conn

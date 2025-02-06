@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/api"
-	st "github.com/senpro-it/dsb-tool/extras/surrealdb-driver/surrealtypes"
+	"github.com/IngwiePhoenix/surrealdb-driver/api"
+	st "github.com/IngwiePhoenix/surrealdb-driver/surrealtypes"
 )
 
 // Basically a ripoff from: https://github.com/go-sql-driver/mysql/blob/341a5a5246835b2ac4b8d36bb12a9dfad70663f4/statement.go#L143

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/gorm/clauses"
+	"github.com/IngwiePhoenix/surrealdb-driver/gorm/clauses"
 	"gorm.io/gorm"
 	"gorm.io/gorm/callbacks"
 	"gorm.io/gorm/clause"

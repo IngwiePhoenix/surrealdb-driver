@@ -3,7 +3,7 @@ package surrealtypes
 import (
 	"encoding/json"
 
-	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/utils"
+	"github.com/IngwiePhoenix/surrealdb-driver/utils"
 )
 
 func extractKeys(data []byte) ([]string, error) {

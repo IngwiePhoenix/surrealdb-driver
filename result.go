@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/senpro-it/dsb-tool/extras/surrealdb-driver/api"
-	st "github.com/senpro-it/dsb-tool/extras/surrealdb-driver/surrealtypes"
+	"github.com/IngwiePhoenix/surrealdb-driver/api"
+	st "github.com/IngwiePhoenix/surrealdb-driver/surrealtypes"
 )
 
 type SurrealResult struct {

@@ -3,7 +3,7 @@ package api
 import (
 	"encoding/json"
 
-	st "github.com/senpro-it/dsb-tool/extras/surrealdb-driver/surrealtypes"
+	st "github.com/IngwiePhoenix/surrealdb-driver/surrealtypes"
 	"github.com/wI2L/jsondiff"
 )
 
