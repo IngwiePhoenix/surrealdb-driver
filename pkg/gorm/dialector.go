@@ -47,6 +47,11 @@ var _ (gorm.Dialector) = (*SurrealDialector)(nil)
 // TODO: Should this match?
 //var _ (gorm.ConnPool) = (*driver.SurrealConn)(nil)
 
+func Open(url string) gorm.Dialector {
+
+	return &Dialector{Config: &Config{DSN: dsn, DSNConfig: dsnConf}}
+}
+
 func (SurrealDialector) Name() string {
 	return "surrealdb"
 }
