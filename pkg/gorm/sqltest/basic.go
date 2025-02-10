@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 
-	"gorm.io/driver/sqlite"
+	_ "github.com/IngwiePhoenix/surrealdb-driver"
+	surrealdb "github.com/IngwiePhoenix/surrealdb-driver/pkg/gorm"
 	"gorm.io/gorm"
 )
 
@@ -13,7 +14,7 @@ type User struct {
 }
 
 func main() {
-	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	db, _ := gorm.Open(surrealdb.Open(), &gorm.Config{})
 
 	sql := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
 		return tx.Model(&User{}).Where("name = ?", "Alice").Find(&User{})
