@@ -391,14 +391,16 @@ func (m SurrealDBMigrator) DropColumn(value interface{}, field string) error {
 	})
 }
 func (m SurrealDBMigrator) AlterColumn(dst interface{}, name string) error {
-	return errors.New("currently there is no implementation for SurrealDB to alter columns.")
+	return errors.New("currently there is no implementation for SurrealDB to alter columns")
 }
 func (m SurrealDBMigrator) MigrateColumn(dst interface{}, field *schema.Field, columnType gorm.ColumnType) error {
-	return errors.New("currently there is no implementation for SurrealDB to migrate columns.")
+	return errors.New("currently there is no implementation for SurrealDB to migrate columns")
 }
 
 // MigrateColumnUnique migrate column's UNIQUE constraint, it's part of MigrateColumn.
-func (m SurrealDBMigrator) MigrateColumnUnique(dst interface{}, field *schema.Field, columnType gorm.ColumnType) error
+func (m SurrealDBMigrator) MigrateColumnUnique(dst interface{}, field *schema.Field, columnType gorm.ColumnType) error {
+	return errors.New("not implemented; because I actually don't know what this is ment to do")
+}
 func (m SurrealDBMigrator) HasColumn(value interface{}, field string) bool {
 	found := false
 	err := m.RunWithValue(value, func(stmt *gorm.Statement) error {
@@ -545,7 +547,7 @@ func (m SurrealDBMigrator) CreateIndex(value interface{}, name string) error {
 			*/
 
 			createTableSQL += ";\n"
-			err = m.DB.Exec(createTableSQL).Error
+			err = m.DB.Exec(createTableSQL, values...).Error
 			if err != nil {
 				return err
 			}

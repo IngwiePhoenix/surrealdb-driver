@@ -9,7 +9,6 @@ import (
 	sdbClause "github.com/IngwiePhoenix/surrealdb-driver/pkg/gorm/clauses"
 	"gorm.io/gorm"
 	"gorm.io/gorm/callbacks"
-	"gorm.io/gorm/clause"
 	gormClause "gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 	"gorm.io/gorm/migrator"
@@ -128,14 +127,14 @@ func (dialector SurrealDialector) Migrator(db *gorm.DB) gorm.Migrator {
 	}
 }
 
-func (dialector SurrealDialector) BindVarTo(writer clause.Writer, stmt *gorm.Statement, v interface{}) {
+func (dialector SurrealDialector) BindVarTo(writer gormClause.Writer, stmt *gorm.Statement, v interface{}) {
 	// TODO: SurrealDB uses $<name>[: <type>] = <value> notation.
 	// Taken from the MSSql driver: https://github.com/go-gorm/sqlserver/blob/master/sqlserver.go#L147-L150
 	writer.WriteString("$_")
 	writer.WriteString(strconv.Itoa(len(stmt.Vars)))
 }
 
-func (dialector SurrealDialector) QuoteTo(writer clause.Writer, str string) {
+func (dialector SurrealDialector) QuoteTo(writer gormClause.Writer, str string) {
 	// SurrealDB is really easy about it's strings.
 	// TODO: Handle inline variable substitution
 	// HINT: Use peek-ahead method
@@ -193,6 +192,6 @@ func (dialector SurrealDialector) getSchemaCustomType(field *schema.Field) strin
 	return sqlType
 }
 
-func (dialector SurrealDialector) DefaultValueOf(field *schema.Field) clause.Expression {
-	return clause.Expr{SQL: "DEFAULT"}
+func (dialector SurrealDialector) DefaultValueOf(field *schema.Field) gormClause.Expression {
+	return gormClause.Expr{SQL: "DEFAULT"}
 }
