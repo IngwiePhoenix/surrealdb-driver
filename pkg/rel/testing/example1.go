@@ -35,5 +35,14 @@ func main() {
 		log.Println("Failed to get fields")
 		log.Fatal(err.Error())
 	}
-	fmt.Print(fields)
+	fmt.Println(fields)
+
+	// It makes sense to cast into the "native" adapter; but also,
+	// this unironically makes testing the finalized queries... harder.
+	// Gonna see if I can PR against rel.Adapter to include a flat string builder.
+	surrealAdapter := adapter.(*srel.SurrealDB)
+	b := rel.Select("*").From("$session")
+	str, vals := surrealAdapter.QueryBuilder.Build(b)
+	fmt.Println(str)
+	fmt.Println(vals)
 }
