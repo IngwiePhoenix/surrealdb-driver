@@ -9,7 +9,7 @@ import (
 type Delete struct {
 	BufferFactory builder.BufferFactory
 	Query         builder.QueryWriter
-	Filter        builder.Filter
+	Filter        Filter
 }
 
 // Build SQL query and its arguments.

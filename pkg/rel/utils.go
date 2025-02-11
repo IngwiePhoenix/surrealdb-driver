@@ -5,20 +5,15 @@ import "github.com/go-rel/rel"
 func deepCopyTable(table rel.Table) rel.Table {
 	// Copy primitive fields
 	newTable := rel.Table{
-		Name:   table.Name,
-		Alias:  table.Alias,
-		Limit:  table.Limit,
-		Offset: table.Offset,
+		Name:     table.Name,
+		Rename:   table.Rename,
+		Optional: table.Optional,
+		Options:  table.Options,
 	}
 
 	// Deep copy slices
-	newTable.GroupBy = append([]string{}, table.GroupBy...)
-
-	newTable.OrderBy = make([]rel.Sort, len(table.OrderBy))
-	copy(newTable.OrderBy, table.OrderBy)
-
-	// Deep copy Filter (if necessary, assuming Query is a struct)
-	newTable.Filter = table.Filter // If `Query` contains pointers, you may need a deeper copy here.
+	newTable.Definitions = make([]rel.TableDefinition, len(table.Definitions))
+	copy(newTable.Definitions, table.Definitions)
 
 	return newTable
 }

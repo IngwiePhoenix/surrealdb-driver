@@ -33,7 +33,6 @@ func (i Insert) WriteInsertInto(buffer *builder.Buffer, table string) {
 
 func (i Insert) WriteValues(buffer *builder.Buffer, mutates map[string]rel.Mutate) {
 	n := 0
-	arguments := make([]any, 0, len(mutates))
 	buffer.WriteString(" (")
 	for field, mut := range mutates {
 		if mut.Type != rel.ChangeInvalidOp {
@@ -48,8 +47,7 @@ func (i Insert) WriteValues(buffer *builder.Buffer, mutates map[string]rel.Mutat
 	n = 0
 	for _, mut := range mutates {
 		if mut.Type != rel.ChangeInvalidOp {
-			buffer.WritePlaceholder()
-			arguments = append(arguments, mut.Value)
+			buffer.WriteValue(mut.Value)
 			if n > 0 {
 				buffer.WriteString(", ")
 			}
@@ -57,7 +55,6 @@ func (i Insert) WriteValues(buffer *builder.Buffer, mutates map[string]rel.Mutat
 		}
 	}
 	buffer.WriteString(")")
-	buffer.AddArguments(arguments...)
 }
 
 func (i Insert) WriteReturning(buffer *builder.Buffer, primaryField string) {
@@ -75,7 +72,7 @@ func (i Insert) WriteOnConflict(buffer *builder.Buffer, mutates map[string]rel.M
 		}
 	}
 	if realMutates > 0 {
-		buffer.WriteString(" ON DUPLICATE KEY UPDATE")
+		buffer.WriteString(" ON DUPLICATE KEY UPDATE ")
 		for field, mutate := range mutates {
 			// TODO: escape
 			buffer.WriteString(field)
@@ -85,8 +82,7 @@ func (i Insert) WriteOnConflict(buffer *builder.Buffer, mutates map[string]rel.M
 			} else if mutate.Type == rel.ChangeFragmentOp {
 				buffer.WriteString(" = ")
 			}
-			buffer.WritePlaceholder()
-			buffer.AddArguments(mutate.Value)
+			buffer.WriteValue(mutate.Value)
 		}
 	}
 }

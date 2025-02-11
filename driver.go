@@ -6,8 +6,8 @@ import (
 	"errors"
 	"log"
 
-	"github.com/gorilla/websocket"
 	"github.com/IngwiePhoenix/surrealdb-driver/config"
+	"github.com/gorilla/websocket"
 )
 
 // implements driver.Driver

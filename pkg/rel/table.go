@@ -2,26 +2,26 @@ package rel
 
 import (
 	"log"
-	"strconv"
 
 	"github.com/go-rel/rel"
 	"github.com/go-rel/sql/builder"
 )
 
 type (
-	ColumnMapper        func(*rel.Column) (string, int, int)
-	ColumnOptionsMapper func(*rel.Column) string
-	DropKeyMapper       func(rel.KeyType) string
-	DefinitionFilter    func(table rel.Table, def rel.TableDefinition) bool
+	//ColumnMapper func(*rel.Column) (string, int, int)
+	//ColumnOptionsMapper func(*rel.Column) string
+	//DropKeyMapper       func(rel.KeyType) string
+	DefinitionFilter func(table rel.Table, def rel.TableDefinition) bool
 )
 
 // Table builder.
 type Table struct {
-	BufferFactory       builder.BufferFactory
-	ColumnMapper        ColumnMapper
-	ColumnOptionsMapper ColumnOptionsMapper
-	DropKeyMapper       DropKeyMapper
-	DefinitionFilter    DefinitionFilter
+	BufferFactory    builder.BufferFactory
+	DefinitionFilter DefinitionFilter
+	// Unused; was part of copying the core version from go-rel/sql/builder
+	//ColumnMapper  ColumnMapper
+	//ColumnOptionsMapper ColumnOptionsMapper
+	//DropKeyMapper       DropKeyMapper
 }
 
 // Build SQL query for table creation and modification.
@@ -57,13 +57,14 @@ func (t Table) WriteDefineTable(buffer *builder.Buffer, table rel.Table) {
 
 	// Body
 	if len(defs) > 0 {
-		for i, def := range defs {
+		for _, def := range defs {
 			switch v := def.(type) {
 			case rel.Column:
 				// DEFINE FIELD
 				t.WriteDefineField(buffer, table.Name, v)
 			case rel.Key:
-				t.WriteDefineFieldForKey(buffer, table.Name, v)
+				// TODO: How do I deal with those o.o?
+				//t.WriteDefineFieldForKey(buffer, table.Name, v)
 			case rel.Raw:
 				buffer.WriteString(string(v))
 				// TODO: rel.Index ?
@@ -74,6 +75,7 @@ func (t Table) WriteDefineTable(buffer *builder.Buffer, table rel.Table) {
 }
 
 // TODO: SurrealDB has no primary or foreign key - and thus no such defs...
+/*
 func (t Table) WriteDefineFieldForKey(buffer *builder.Buffer, tname string, key rel.Key) {
 	buffer.WriteString("DEFINE INDEX ")
 	buffer.WriteString(key.Name)
@@ -89,6 +91,7 @@ func (t Table) WriteDefineFieldForKey(buffer *builder.Buffer, tname string, key 
 	buffer.WriteString(key.Options)
 	buffer.WriteString("; ")
 }
+*/
 
 func (t Table) WriteDefineField(buffer *builder.Buffer, tname string, col rel.Column) {
 	buffer.WriteString("DEFINE FIELD ")
@@ -146,37 +149,13 @@ func (t Table) WriteDefineField(buffer *builder.Buffer, tname string, col rel.Co
 
 	if col.Unique {
 		// HACK: Quick and dirty unique index insert
-		t.WriteDefineUniqueIndex(buffer, tname, col.name)
+		t.WriteDefineUniqueIndex(buffer, tname, col.Name)
 	}
 }
 
 // WriteAlterTable query to buffer.
 func (t Table) WriteAlterTable(buffer *builder.Buffer, table rel.Table) {
 	defs := t.definitions(table)
-
-	if table.Op == rel.SchemaAlter && table.Rename != "" {
-		// We need to copy a whole table... which is super unoptimal.
-		// 0. Pretend this is a wholly new table.
-		newTable := deepCopyTable(table)
-		newTable.Name = newTable.Rename
-		newTable.Rename = ""
-		// 1. Use that table to write a whole new definition
-		t.WriteDefineTable(buffer, newTable)
-		// 2. Copy **everything**
-		buffer.WriteString("INSERT ")
-		buffer.WriteTable(newTable.Name)
-		buffer.WriteString(" CONTENT (SELECT * FROM ")
-		buffer.WriteTable(table.Name)
-		buffer.WriteString(") PARALLEL; ")
-		// 3. Remove old
-		buffer.WriteString("REMOVE TABLE ")
-		buffer.WriteTable(table.Name)
-		buffer.WriteString("; ")
-
-		// from here on out, we have to assume the changes took effect.
-		// I am pretty sure I'm shooting myself in the foot.
-		table = newTable
-	}
 
 	for _, def := range defs {
 		switch v := def.(type) {
@@ -219,120 +198,37 @@ func (t Table) WriteAlterTable(buffer *builder.Buffer, table rel.Table) {
 			buffer.WriteString(string(v))
 		}
 
-		t.WriteOptions(buffer, table.Options)
+		// TODO: I need to figure something out with table and column .Options
+		// Can I just comma-list some stuff like overwrite etc.? A-la struct-tag??
+		//t.WriteOptions(buffer, table.Options)
 		buffer.WriteByte(';')
 	}
 }
 
-// WriteRenameTable query to buffer.
 func (t Table) WriteRenameTable(buffer *builder.Buffer, table rel.Table) {
-	buffer.WriteString("ALTER TABLE ")
+	// We need to copy a whole table... which is super unoptimal.
+	// 0. Pretend this is a wholly new table.
+	newTable := deepCopyTable(table)
+	newTable.Name = newTable.Rename
+	newTable.Rename = ""
+	// 1. Use that table to write a whole new definition
+	t.WriteDefineTable(buffer, newTable)
+	// 2. Copy **everything**
+	buffer.WriteString("INSERT ")
+	buffer.WriteTable(newTable.Name)
+	buffer.WriteString(" CONTENT (SELECT * FROM ")
 	buffer.WriteTable(table.Name)
-	buffer.WriteString(" RENAME TO ")
-	buffer.WriteTable(table.Rename)
-	buffer.WriteByte(';')
+	buffer.WriteString(") PARALLEL; ")
+	// 3. Remove old
+	buffer.WriteString("REMOVE TABLE ")
+	buffer.WriteTable(table.Name)
+	buffer.WriteString("; ")
 }
 
-// WriteDropTable query to buffer.
 func (t Table) WriteDropTable(buffer *builder.Buffer, table rel.Table) {
-	buffer.WriteString("DROP TABLE ")
-
-	if table.Optional {
-		buffer.WriteString("IF EXISTS ")
-	}
-
+	buffer.WriteString("REMOVE TABLE ")
 	buffer.WriteTable(table.Name)
-	buffer.WriteByte(';')
-}
-
-// WriteColumn definition to buffer.
-func (t Table) WriteColumn(buffer *builder.Buffer, column rel.Column) {
-	typ, m, n := t.ColumnMapper(&column)
-
-	buffer.WriteEscape(column.Name)
-	buffer.WriteByte(' ')
-	buffer.WriteString(typ)
-
-	if m != 0 {
-		buffer.WriteByte('(')
-		buffer.WriteString(strconv.Itoa(m))
-
-		if n != 0 {
-			buffer.WriteByte(',')
-			buffer.WriteString(strconv.Itoa(n))
-		}
-
-		buffer.WriteByte(')')
-	}
-
-	if opts := t.ColumnOptionsMapper(&column); opts != "" {
-		buffer.WriteByte(' ')
-		buffer.WriteString(opts)
-	}
-
-	if column.Default != nil {
-		buffer.WriteString(" DEFAULT ")
-		buffer.WriteValue(column.Default)
-	}
-
-	t.WriteOptions(buffer, column.Options)
-}
-
-// WriteKey definition to buffer.
-func (t Table) WriteKey(buffer *builder.Buffer, key rel.Key) {
-	typ := string(key.Type)
-
-	buffer.WriteString(typ)
-
-	if key.Name != "" {
-		buffer.WriteByte(' ')
-		buffer.WriteEscape(key.Name)
-	}
-
-	buffer.WriteString(" (")
-	for i, col := range key.Columns {
-		if i > 0 {
-			buffer.WriteString(", ")
-		}
-		buffer.WriteEscape(col)
-	}
-	buffer.WriteString(")")
-
-	if key.Type == rel.ForeignKey {
-		buffer.WriteString(" REFERENCES ")
-		buffer.WriteTable(key.Reference.Table)
-
-		buffer.WriteString(" (")
-		for i, col := range key.Reference.Columns {
-			if i > 0 {
-				buffer.WriteString(", ")
-			}
-			buffer.WriteEscape(col)
-		}
-		buffer.WriteString(")")
-
-		if onDelete := key.Reference.OnDelete; onDelete != "" {
-			buffer.WriteString(" ON DELETE ")
-			buffer.WriteString(onDelete)
-		}
-
-		if onUpdate := key.Reference.OnUpdate; onUpdate != "" {
-			buffer.WriteString(" ON UPDATE ")
-			buffer.WriteString(onUpdate)
-		}
-	}
-
-	t.WriteOptions(buffer, key.Options)
-}
-
-// WriteOptions sql to buffer.
-func (t Table) WriteOptions(buffer *builder.Buffer, options string) {
-	if options == "" {
-		return
-	}
-
-	buffer.WriteByte(' ')
-	buffer.WriteString(options)
+	buffer.WriteString("; ")
 }
 
 func (t Table) definitions(table rel.Table) []rel.TableDefinition {
@@ -378,8 +274,8 @@ func (t Table) WriteRemoveUniqueIndex(buffer *builder.Buffer, tableName, colName
 
 func (t Table) WriteRemoveField(buffer *builder.Buffer, tableName, colName string) {
 	buffer.WriteString("REMOVE FIELD ")
-	buffer.WriteField(table.Name, v.Name)
+	buffer.WriteField(tableName, colName)
 	buffer.WriteString("ON TABLE ")
-	buffer.WriteTable(table.Name)
+	buffer.WriteTable(tableName)
 	buffer.WriteString("; ")
 }

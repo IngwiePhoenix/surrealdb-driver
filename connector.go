@@ -5,9 +5,9 @@ import (
 	"database/sql/driver"
 	"errors"
 
-	"github.com/gorilla/websocket"
 	"github.com/IngwiePhoenix/surrealdb-driver/api"
 	"github.com/IngwiePhoenix/surrealdb-driver/config"
+	"github.com/gorilla/websocket"
 )
 
 // implements driver.Connector
