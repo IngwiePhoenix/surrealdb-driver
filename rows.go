@@ -110,6 +110,7 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 	case api.QueryResponse:
 		res := rows.rawResult.(api.QueryResponse)
 		objs := *res.Result
+		rows.conn.Driver.LogInfo("Rows:next, grabbing: ", rows.resultIdx, len(objs))
 		if rows.resultIdx >= len(objs) {
 			return io.EOF
 		}
