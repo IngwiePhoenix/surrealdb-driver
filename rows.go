@@ -21,6 +21,10 @@ type SurrealRows struct {
 	foundColumns []string
 }
 
+var _ (driver.Rows) = (*SurrealRows)(nil)
+
+//var _ driver.RowsColumnTypeScanType
+
 func (rows *SurrealRows) Close() error {
 	if !rows.conn.IsValid() {
 		return driver.ErrBadConn
@@ -131,7 +135,11 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 		cols := rows.Columns()
 		for i, v := range cols {
 			rows.conn.Driver.LogInfo("Rows:next, 2nd level iteration: ", i, v)
-			dest[i] = entry[v]
+			dv, err := convertValue(v)
+			if err != nil {
+				return err
+			}
+			dest[i] = dv
 		}
 
 		// Technically an error won't really happen here but, just in case.
@@ -177,8 +185,11 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 				// .Columns() has returned "valies", so do we.
 				// Each column is just the index number, so we return the values.
 				for i, v := range r {
-					// TODO: Can we add more type info...?
-					dest[i] = v
+					ev, err := convertValue(v)
+					if err != nil {
+						return err
+					}
+					dest[i] = ev
 				}
 			}
 			// failsafe
@@ -186,13 +197,21 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 		} else {
 			rows.conn.Driver.LogInfo("Rows:next, Handle anything else (value)")
 			// .Columns() has returned "value"
-			dest[0] = obj
+			ev, err := convertValue(obj)
+			if err != nil {
+				return err
+			}
+			dest[0] = ev
 			return nil
 		}
 
 	case api.InfoResponse:
 		r := rows.rawResult.(api.InfoResponse)
-		dest[0] = r.Result
+		re, err := convertValue(r.Result)
+		if err != nil {
+			return err
+		}
+		dest[0] = re
 		return nil
 
 	case api.RelationResponse:
