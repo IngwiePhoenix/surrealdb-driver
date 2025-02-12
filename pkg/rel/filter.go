@@ -50,20 +50,24 @@ func (f Filter) Write(buffer *builder.Buffer, table string, filter rel.FilterQue
 		rel.FilterGteOp:
 		f.WriteComparison(buffer, table, filter, queryWriter)
 	case rel.FilterNilOp:
-		buffer.WriteField(table, filter.Field)
+		// TODO: This was WriteField() - perhaps a mistake?
+		buffer.WriteEscape(filter.Field)
 		buffer.WriteString(" IS NULL")
 	case rel.FilterNotNilOp:
-		buffer.WriteField(table, filter.Field)
+		// TODO: This was WriteField() - perhaps a mistake?
+		buffer.WriteEscape(filter.Field)
 		buffer.WriteString(" IS NOT NULL")
 	case rel.FilterInOp,
 		rel.FilterNinOp:
 		f.WriteInclusion(buffer, table, filter, queryWriter)
 	case rel.FilterLikeOp:
-		buffer.WriteField(table, filter.Field)
+		// TODO: This was WriteField() - perhaps a mistake?
+		buffer.WriteEscape(filter.Field)
 		buffer.WriteString(" INSIDE ")
 		buffer.WriteValue(filter.Value)
 	case rel.FilterNotLikeOp:
-		buffer.WriteField(table, filter.Field)
+		// TODO: This was WriteField() - perhaps a mistake?
+		buffer.WriteEscape(filter.Field)
 		buffer.WriteString(" NOTINSIDE ")
 		buffer.WriteValue(filter.Value)
 	case rel.FilterFragmentOp:
@@ -101,7 +105,8 @@ func (f Filter) WriteLogical(buffer *builder.Buffer, table, op string, inner []r
 
 // WriteComparison SQL to buffer.
 func (f Filter) WriteComparison(buffer *builder.Buffer, table string, filter rel.FilterQuery, queryWriter builder.QueryWriter) {
-	buffer.WriteField(table, filter.Field)
+	// TODO: This was a WriteField before - perhaps a mistake?
+	buffer.WriteEscape(filter.Field)
 
 	switch filter.Type {
 	case rel.FilterEqOp:
@@ -144,7 +149,8 @@ func (f Filter) WriteInclusion(buffer *builder.Buffer, table string, filter rel.
 			buffer.WriteString("1=1")
 		}
 	} else {
-		buffer.WriteField(table, filter.Field)
+		// TODO: This was a Writefield - perhaps a mistake?
+		buffer.WriteEscape(filter.Field)
 
 		if filter.Type == rel.FilterInOp {
 			buffer.WriteString(" INSIDE ")

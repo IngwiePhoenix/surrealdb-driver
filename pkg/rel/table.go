@@ -169,9 +169,9 @@ func (t Table) WriteAlterTable(buffer *builder.Buffer, table rel.Table) {
 				buffer.WriteString("UPDATE ")
 				buffer.WriteTable(table.Name)
 				buffer.WriteString(" SET ")
-				buffer.WriteField(table.Name, v.Rename)
+				buffer.WriteEscape(v.Rename)
 				buffer.WriteString(" = ")
-				buffer.WriteField(table.Name, v.Name)
+				buffer.WriteEscape(v.Name)
 				buffer.WriteString("; ")
 				// 3. Delete old
 				if v.Unique {
@@ -273,7 +273,7 @@ func (t Table) WriteRemoveUniqueIndex(buffer *builder.Buffer, tableName, colName
 
 func (t Table) WriteRemoveField(buffer *builder.Buffer, tableName, colName string) {
 	buffer.WriteString("REMOVE FIELD ")
-	buffer.WriteField(tableName, colName)
+	buffer.WriteEscape(colName)
 	buffer.WriteString("ON TABLE ")
 	buffer.WriteTable(tableName)
 	buffer.WriteString("; ")
