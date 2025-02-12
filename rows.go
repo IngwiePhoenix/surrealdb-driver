@@ -158,21 +158,26 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 		if rows.resultIdx >= len(objs) {
 			rows.conn.Driver.LogInfo("Rows:next, Done reading: ", rows.resultIdx, len(objs))
 			return io.EOF
+		} else {
+			rows.conn.Driver.LogInfo("Rows:next, STILL reading")
 		}
+
 		qres := objs[rows.resultIdx]
 		obj := qres.Result
 		defer func() {
 			rows.resultIdx = rows.resultIdx + 1
 		}()
+
 		if qres.Status != "OK" {
 			msg := obj.(string)
 			return errors.New(msg)
 		}
+
 		if r, ok := obj.(st.Object); ok {
 			rows.conn.Driver.LogInfo("Rows:next, Handle st.Object")
 			return handleResult(r)
 		} else if r, ok := obj.([]st.Object); ok {
-			rows.conn.Driver.LogInfo("Rows:next, Handle []st.Object (values)")
+			rows.conn.Driver.LogInfo("Rows:next, Handle []st.Object")
 			// Check if we are on a good entry
 			if rows.entryIdx >= len(r) {
 				return io.EOF
@@ -184,6 +189,7 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 			entry := r[rows.entryIdx]
 			return handleResult(entry)
 		} else if r, ok := obj.([]interface{}); ok {
+			rows.conn.Driver.LogInfo("Rows:next, Handle []interface{} (values)")
 			// .Columns() has returned "valies", so do we.
 			// Each column is just the index number, so we return the values.
 			for i, v := range r {
