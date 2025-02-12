@@ -17,6 +17,7 @@ type SurrealRows struct {
 	conn      *SurrealConn
 	rawResult any
 	resultIdx int
+	entryIdx  int
 }
 
 func (rows *SurrealRows) Close() error {
@@ -46,13 +47,29 @@ func (rows *SurrealRows) Columns() (cols []string) {
 		}
 		currRow := (*res.Result)[currId]
 		if r, ok := currRow.Result.(st.Object); ok {
+			rows.conn.Driver.LogInfo("Rows:columns, Handling st.Object")
 			return handleSingleQueryObj(r)
 		} else if r, ok := currRow.Result.([]interface{}); ok {
-			// Query that has a non-object array response.
-			// Possibly something like "return [1, 2];"
-			// Best to tread it basic
-			for k := range r {
-				cols = append(cols, strconv.Itoa(k))
+			rows.conn.Driver.LogInfo("Rows:columns, Handling []interface{}")
+			// TODO: We can probably do .([]st.Object) ?
+			seen := map[string]bool{}
+			for k, o := range r {
+				if e, ok := o.(st.Object); ok {
+					rows.conn.Driver.LogInfo("Rows:columns, Handling st.Object in []interface{}")
+					// We are dealing with a list of objects
+					for eKey := range e {
+						if !seen[eKey] {
+							seen[eKey] = true
+							cols = append(cols, eKey)
+						}
+					}
+				} else {
+					rows.conn.Driver.LogInfo("Rows:columns, Handling any in []interface{}")
+					// Query that has a non-object array response.
+					// Possibly something like "return [1, 2];"
+					// Best to tread it basic
+					cols = append(cols, strconv.Itoa(k))
+				}
 			}
 			return cols
 		} else {
@@ -129,12 +146,26 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 			return handleResult(r)
 		} else if r, ok := obj.([]interface{}); ok {
 			rows.conn.Driver.LogInfo("Rows:next, Handle []interface{} (values)")
-			// .Columns() has returned "valies", so do we.
-			// Each column is just the index number, so we return the values.
-			for i, v := range r {
-				// TODO: Can we add more type info...?
-				dest[i] = v
+			// Check if we are on a good entry
+			if rows.entryIdx >= len(r) {
+				return io.EOF
 			}
+			// Increment the entry index
+			defer func() {
+				rows.entryIdx++
+			}()
+			entry := r[rows.entryIdx]
+			if e, ok := entry.(st.Object); ok {
+				return handleResult(e)
+			} else {
+				// .Columns() has returned "valies", so do we.
+				// Each column is just the index number, so we return the values.
+				for i, v := range r {
+					// TODO: Can we add more type info...?
+					dest[i] = v
+				}
+			}
+			// failsafe
 			return nil
 		} else {
 			rows.conn.Driver.LogInfo("Rows:next, Handle anything else (value)")
