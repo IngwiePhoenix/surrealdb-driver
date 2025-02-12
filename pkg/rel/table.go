@@ -1,8 +1,6 @@
 package rel
 
 import (
-	"log"
-
 	"github.com/go-rel/rel"
 	"github.com/go-rel/sql/builder"
 )
@@ -95,16 +93,16 @@ func (t Table) WriteDefineFieldForKey(buffer *builder.Buffer, tname string, key 
 
 func (t Table) WriteDefineField(buffer *builder.Buffer, tname string, col rel.Column) {
 	buffer.WriteString("DEFINE FIELD ")
-	buffer.WriteString(col.Name)
+	buffer.WriteEscape(col.Name)
 	buffer.WriteString(" ON TABLE ")
-	buffer.WriteString(tname)
+	buffer.WriteEscape(tname)
 	buffer.WriteString(" TYPE ")
 	var typ string
 	switch col.Type {
 	case rel.Bool:
 		// st.Bool
 		typ = "bool"
-	case rel.SmallInt, rel.Int, rel.BigID:
+	case rel.SmallInt, rel.Int, rel.BigID, rel.BigInt:
 		// st.Int
 		typ = "int"
 	case rel.Float:
@@ -126,10 +124,10 @@ func (t Table) WriteDefineField(buffer *builder.Buffer, tname string, col rel.Co
 		// st.Duration
 		typ = "duration"
 	default:
-		// Uh... is this how we do custom types here?
+		// t.ColumnType is just a string; so technically anything goes.
 		typ = string(col.Type)
 	}
-	if col.Required {
+	if !col.Required {
 		// Wrap into an optional
 		typ = "option<" + typ + ">"
 	}
@@ -241,9 +239,10 @@ func (t Table) definitions(table rel.Table) []rel.TableDefinition {
 	for _, def := range table.Definitions {
 		if t.DefinitionFilter(table, def) {
 			result = append(result, def)
-		} else {
+		} /*else {
+			// TODO: Better optional logging. Built-in instrumentation has no levels
 			log.Printf("[REL] An unsupported table definition has been excluded: %T", def)
-		}
+		}*/
 	}
 
 	return result
