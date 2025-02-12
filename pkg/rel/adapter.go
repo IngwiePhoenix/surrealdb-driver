@@ -23,7 +23,7 @@ func New(database *db.DB) rel.Adapter {
 			ArgumentPlaceholder: "?",
 			BoolTrueValue:       "TRUE",
 			BoolFalseValue:      "FALSE",
-			Quoter:              builder.Quote{},
+			Quoter:              Quote{},
 			ValueConverter:      ValueConvert{},
 		}
 		filterBuilder = Filter{}
@@ -67,9 +67,6 @@ func New(database *db.DB) rel.Adapter {
 		}
 		indexBuilder = Index{
 			BufferFactory: ddlBufferFactory,
-			//Query:            ddlQueryBuilder,
-			//Filter:           filterBuilder,
-			//DropIndexOnTable: true,
 		}
 	)
 
