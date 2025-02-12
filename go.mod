@@ -10,6 +10,7 @@ require (
 )
 
 require (
+	github.com/go-rel/migration v0.3.1 // indirect
 	github.com/go-rel/rel v0.42.0 // indirect
 	github.com/go-rel/sql v0.17.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
