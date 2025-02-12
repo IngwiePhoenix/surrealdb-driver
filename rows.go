@@ -14,10 +14,11 @@ import (
 
 // implements driver.Rows
 type SurrealRows struct {
-	conn      *SurrealConn
-	rawResult any
-	resultIdx int
-	entryIdx  int
+	conn         *SurrealConn
+	rawResult    any
+	resultIdx    int
+	entryIdx     int
+	foundColumns []string
 }
 
 func (rows *SurrealRows) Close() error {
@@ -28,6 +29,11 @@ func (rows *SurrealRows) Close() error {
 }
 
 func (rows *SurrealRows) Columns() (cols []string) {
+	// Short-circuit
+	if len(rows.foundColumns) > 0 {
+		return rows.foundColumns
+	}
+
 	handleSingleQueryObj := func(r st.Object) []string {
 		out := []string{}
 		for k := range r {
@@ -42,13 +48,16 @@ func (rows *SurrealRows) Columns() (cols []string) {
 		res := rows.rawResult.(api.QueryResponse)
 		currId := rows.resultIdx
 		if currId >= len(*res.Result) {
-			// Should we panic?
+			// Should we panic? -- Yes, we actually probably should.
+			rows.conn.Driver.LogInfo("Rows:columns, Early exit?!")
 			return []string{}
 		}
 		currRow := (*res.Result)[currId]
 		if r, ok := currRow.Result.(st.Object); ok {
 			rows.conn.Driver.LogInfo("Rows:columns, Handling st.Object")
-			return handleSingleQueryObj(r)
+			cols = handleSingleQueryObj(r)
+			rows.foundColumns = cols
+			return cols
 		} else if r, ok := currRow.Result.([]interface{}); ok {
 			rows.conn.Driver.LogInfo("Rows:columns, Handling []interface{}")
 			// TODO: We can probably do .([]st.Object) ?
@@ -74,6 +83,7 @@ func (rows *SurrealRows) Columns() (cols []string) {
 			}
 			rows.conn.Driver.LogInfo("Rows:columns, Collected: ", cols)
 			sort.Strings(cols)
+			rows.foundColumns = cols
 			return cols
 		} else {
 			// Assume a primitive
@@ -90,7 +100,9 @@ func (rows *SurrealRows) Columns() (cols []string) {
 		}
 		res := rows.rawResult.(api.InfoResponse)
 		obj := res.Result
-		return handleSingleQueryObj(*obj)
+		cols = handleSingleQueryObj(*obj)
+		rows.foundColumns = cols
+		return cols
 
 	case api.RelationResponse:
 		if rows.resultIdx > 0 {
@@ -103,6 +115,7 @@ func (rows *SurrealRows) Columns() (cols []string) {
 			cols = append(cols, k)
 		}
 		sort.Strings(cols)
+		rows.foundColumns = cols
 		return cols
 
 	// TODO: Every other response kind...
