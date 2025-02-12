@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"net/http"
 
 	"github.com/IngwiePhoenix/surrealdb-driver/api"
 	"github.com/IngwiePhoenix/surrealdb-driver/config"
@@ -21,7 +22,11 @@ var _ driver.Connector = (*SurrealConnector)(nil)
 
 func (c *SurrealConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	c.driver.LogInfo("Connector:Connect start", c.Creds.GetDBUrl())
-	conn, resp, err := c.Dialer.DialContext(ctx, c.Creds.GetDBUrl(), nil)
+	headers := http.Header{}
+	headers.Add("Content-Type", "application/json")
+	headers.Add("Accept", "application/json")
+	headers.Add("Sec-WebSocket-Protocol", "json") // why x.x
+	conn, resp, err := c.Dialer.DialContext(ctx, c.Creds.GetDBUrl(), headers)
 	if err != nil {
 		c.driver.LogInfo("Connector:Connect error", err, resp)
 		return nil, err
