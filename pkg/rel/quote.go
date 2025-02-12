@@ -1,6 +1,9 @@
 package rel
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
 
 type Quote struct{}
 
@@ -11,7 +14,7 @@ func (q Quote) ID(name string) string {
 	if err != nil {
 		panic(err.Error())
 	}
-	return string(bytes)
+	return strings.Trim(string(bytes), "\"")
 }
 
 // TODO: I might have to do something specific here... maybe. perhaps.
