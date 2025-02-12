@@ -64,9 +64,8 @@ func (con *SurrealConn) execObj(req *api.Request) (any, error) {
 			con.Driver.LogInfo("Conn:execObj, received: ", string(msg), res)
 			con.Driver.LogInfo("Conn:execObj, type: ", fmt.Sprintf("%T", res))
 			queryErrors := []error{}
-			switch res.(type) {
+			switch qres := res.(type) {
 			case api.QueryResponse:
-				qres := res.(api.QueryResponse)
 				resList := *qres.Result
 				for _, resEntry := range resList {
 					if resEntry.Status != "OK" {
@@ -75,7 +74,7 @@ func (con *SurrealConn) execObj(req *api.Request) (any, error) {
 					}
 				}
 			case api.FatalErrorResponse:
-				reqErr := res.(api.FatalErrorResponse).Error
+				reqErr := qres.Error
 				con.Driver.LogInfo("Conn:execObj, fatal error: ", reqErr)
 				return nil, reqErr.ToError()
 			}

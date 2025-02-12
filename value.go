@@ -88,9 +88,7 @@ func convertValue(input any) (any, error) {
 		// Is it a Set?
 		if allMixed(a) {
 			out := st.Set{}
-			for i, v := range a {
-				out[i] = v
-			}
+			copy(out, a)
 			return out, nil
 		}
 
