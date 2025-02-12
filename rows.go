@@ -59,12 +59,12 @@ func (rows *SurrealRows) Columns() (cols []string) {
 		}
 
 		currRow := (*res.Result)[currId]
-		if r, ok := currRow.Result.(st.Object); ok {
+		if r, ok := currRow.Result.(map[string]interface{}); ok {
 			rows.conn.Driver.LogInfo("Rows:columns, Handling st.Object")
 			cols = handleSingleQueryObj(r)
 			rows.foundColumns = cols
 			return cols
-		} else if r, ok := currRow.Result.([]st.Object); ok {
+		} else if r, ok := currRow.Result.([]map[string]interface{}); ok {
 			rows.conn.Driver.LogInfo("Rows:columns, Handling []st.Object")
 			seen := map[string]bool{}
 			for _, e := range r {
@@ -173,10 +173,10 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 			return errors.New(msg)
 		}
 
-		if r, ok := obj.(st.Object); ok {
+		if r, ok := obj.(map[string]interface{}); ok {
 			rows.conn.Driver.LogInfo("Rows:next, Handle st.Object")
 			return handleResult(r)
-		} else if r, ok := obj.([]st.Object); ok {
+		} else if r, ok := obj.([]map[string]interface{}); ok {
 			rows.conn.Driver.LogInfo("Rows:next, Handle []st.Object")
 			// Check if we are on a good entry
 			if rows.entryIdx >= len(r) {

@@ -136,6 +136,21 @@ func convertValue(input any) (any, error) {
 		// SKIP: NONE
 	}
 
+	// Is it an array of objects?
+	if oa, ok := input.([]map[string]interface{}); ok {
+		out := make([]st.Object, len(oa))
+		for i, a := range oa {
+			for k, v := range a {
+				val, err := convertValue(v)
+				if err != nil {
+					return nil, err
+				}
+				out[i][k] = val
+			}
+		}
+		return out, nil
+	}
+
 	// It's likely an object at this point.
 	if o, ok := input.(st.Object); ok {
 		out := map[string]any{}
