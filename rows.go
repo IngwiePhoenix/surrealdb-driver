@@ -125,8 +125,10 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 			return errors.New(msg)
 		}
 		if r, ok := obj.(st.Object); ok {
+			rows.conn.Driver.LogInfo("Rows:next, Handle st.Object")
 			return handleResult(r)
 		} else if r, ok := obj.([]interface{}); ok {
+			rows.conn.Driver.LogInfo("Rows:next, Handle []interface{} (values)")
 			// .Columns() has returned "valies", so do we.
 			// Each column is just the index number, so we return the values.
 			for i, v := range r {
@@ -135,6 +137,7 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 			}
 			return nil
 		} else {
+			rows.conn.Driver.LogInfo("Rows:next, Handle anything else (value)")
 			// .Columns() has returned "value"
 			dest[0] = obj
 			return nil
