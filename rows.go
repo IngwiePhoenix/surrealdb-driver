@@ -40,7 +40,7 @@ func (rows *SurrealRows) Columns() (cols []string) {
 	case api.QueryResponse:
 		res := rows.rawResult.(api.QueryResponse)
 		currId := rows.resultIdx
-		if currId > len(*res.Result) {
+		if currId >= len(*res.Result) {
 			// Should we panic?
 			return []string{}
 		}
