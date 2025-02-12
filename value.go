@@ -55,7 +55,7 @@ func convertValue(input any) (any, error) {
 	// time.Time
 	if s, ok := input.(string); ok {
 		t, err := time.Parse(time.RFC3339Nano, s)
-		if !errors.Is(err, &time.ParseError{}) {
+		if err != nil && !errors.As(err, &time.ParseError{}) {
 			// We ignore parse errors, everything else is an issue.
 			return nil, err
 		}
@@ -65,7 +65,7 @@ func convertValue(input any) (any, error) {
 	// time.Duration
 	if s, ok := input.(string); ok {
 		t, err := time.ParseDuration(s)
-		if !errors.Is(err, &time.ParseError{}) {
+		if err != nil && !errors.As(err, &time.ParseError{}) {
 			// We ignore parse errors, everything else is an issue.
 			return nil, err
 		}

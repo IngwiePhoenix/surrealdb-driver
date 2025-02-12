@@ -133,8 +133,9 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 		cols := rows.Columns()
 		for i, v := range cols {
 			rows.conn.Driver.LogInfo("Rows:next, 2nd level iteration: ", i, v)
-			dv, err := convertValue(v)
+			dv, err := convertValue(entry[v])
 			if err != nil {
+				rows.conn.Driver.LogInfo("Rows:next, Saw error: ", err.Error())
 				return err
 			}
 			dest[i] = dv
