@@ -59,6 +59,7 @@ func (rows *SurrealRows) Columns() (cols []string) {
 					// We are dealing with a list of objects
 					for eKey := range e {
 						if !seen[eKey] {
+							rows.conn.Driver.LogInfo("Rows:columns, Saw: ", eKey)
 							seen[eKey] = true
 							cols = append(cols, eKey)
 						}
@@ -71,6 +72,8 @@ func (rows *SurrealRows) Columns() (cols []string) {
 					cols = append(cols, strconv.Itoa(k))
 				}
 			}
+			rows.conn.Driver.LogInfo("Rows:columns, Collected: ", cols)
+			sort.Strings(cols)
 			return cols
 		} else {
 			// Assume a primitive
