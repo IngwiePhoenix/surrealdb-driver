@@ -94,7 +94,7 @@ func convertValue(input any) (any, error) {
 
 		// It's an array, determine the type.
 		if allOf[st.Bool](a) {
-			out := []st.Bool{}
+			out := make([]st.Bool, len(a))
 			for i, v := range a {
 				out[i] = v.(st.Bool)
 			}
@@ -102,7 +102,7 @@ func convertValue(input any) (any, error) {
 		}
 
 		if allOf[st.Bytes](a) {
-			out := []st.Bytes{}
+			out := make([]st.Bytes, len(a))
 			for i, v := range a {
 				out[i] = v.(st.Bytes)
 			}
@@ -110,7 +110,7 @@ func convertValue(input any) (any, error) {
 		}
 
 		if allOf[st.Int](a) {
-			out := []st.Int{}
+			out := make([]st.Int, len(a))
 			for i, v := range a {
 				out[i] = v.(st.Int)
 			}
@@ -118,7 +118,7 @@ func convertValue(input any) (any, error) {
 		}
 
 		if allOf[st.Float](a) {
-			out := []st.Float{}
+			out := make([]st.Float, len(a))
 			for i, v := range a {
 				out[i] = v.(st.Float)
 			}
@@ -126,7 +126,7 @@ func convertValue(input any) (any, error) {
 		}
 
 		if allOf[st.String](a) {
-			out := []st.String{}
+			out := make([]st.String, len(a))
 			for i, v := range a {
 				out[i] = v.(st.String)
 			}
