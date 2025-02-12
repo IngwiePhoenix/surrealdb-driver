@@ -64,32 +64,27 @@ func (rows *SurrealRows) Columns() (cols []string) {
 			cols = handleSingleQueryObj(r)
 			rows.foundColumns = cols
 			return cols
-		} else if r, ok := currRow.Result.([]map[string]interface{}); ok {
-			rows.conn.Driver.LogInfo("Rows:columns, Handling []st.Object")
+		} else if r, ok := currRow.Result.([]interface{}); ok {
+			rows.conn.Driver.LogInfo("Rows:columns, Handling any in []interface{}")
 			seen := map[string]bool{}
-			for _, e := range r {
-				rows.conn.Driver.LogInfo("Rows:columns, Handling st.Object in []interface{}")
-				// We are dealing with a list of objects
-				for eKey := range e {
-					if !seen[eKey] {
-						rows.conn.Driver.LogInfo("Rows:columns, Saw: ", eKey)
-						seen[eKey] = true
-						cols = append(cols, eKey)
+			for k, v := range r {
+				if r, ok := v.(map[string]interface{}); ok {
+					rows.conn.Driver.LogInfo("Rows:columns, Handling st.Object, in array")
+					for _, c := range handleSingleQueryObj(r) {
+						if !seen[c] {
+							seen[c] = true
+							cols = append(cols, c)
+						}
+					}
+				} else {
+					c := strconv.Itoa(k)
+					if !seen[c] {
+						seen[c] = true
+						cols = append(cols, c)
 					}
 				}
 			}
-			rows.conn.Driver.LogInfo("Rows:columns, Collected: ", cols)
-			sort.Strings(cols)
 			rows.foundColumns = cols
-			return cols
-		} else if r, ok := currRow.Result.([]interface{}); ok {
-			rows.conn.Driver.LogInfo("Rows:columns, Handling any in []interface{}")
-			// Query that has a non-object array response.
-			// Possibly something like "return [1, 2];"
-			// Best to tread it basic
-			for k := range r {
-				cols = append(cols, strconv.Itoa(k))
-			}
 			return cols
 		} else {
 			// Assume a primitive
@@ -129,7 +124,7 @@ func (rows *SurrealRows) Columns() (cols []string) {
 	default:
 		panic(fmt.Sprintf("tried to get columns for %T, which isn't supported", rows.rawResult))
 	}
-	panic("reached end of Columns() unexpectedly")
+	//panic("reached end of Columns() unexpectedly")
 }
 
 func (rows *SurrealRows) Next(dest []driver.Value) error {
@@ -176,28 +171,34 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 		if r, ok := obj.(map[string]interface{}); ok {
 			rows.conn.Driver.LogInfo("Rows:next, Handle st.Object")
 			return handleResult(r)
-		} else if r, ok := obj.([]map[string]interface{}); ok {
-			rows.conn.Driver.LogInfo("Rows:next, Handle []st.Object")
+		} else if r, ok := obj.([]interface{}); ok {
+			rows.conn.Driver.LogInfo("Rows:next, Handle []st.Object?")
 			// Check if we are on a good entry
 			if rows.entryIdx >= len(r) {
 				return io.EOF
 			}
+
 			// Increment the entry index
 			defer func() {
 				rows.entryIdx++
 			}()
 			entry := r[rows.entryIdx]
-			return handleResult(entry)
-		} else if r, ok := obj.([]interface{}); ok {
-			rows.conn.Driver.LogInfo("Rows:next, Handle []interface{} (values)")
-			// .Columns() has returned "valies", so do we.
-			// Each column is just the index number, so we return the values.
-			for i, v := range r {
-				ev, err := convertValue(v)
-				if err != nil {
-					return err
+
+			if rx, ok := entry.(map[string]interface{}); ok {
+				rows.conn.Driver.LogInfo("Rows:next, Handle []st.Object, indeed!")
+				return handleResult(rx)
+			} else if rx, ok := entry.([]interface{}); ok {
+				rows.conn.Driver.LogInfo("Rows:next, Handle []interface{} (values)")
+				// .Columns() has returned "valies", so do we.
+				// Each column is just the index number, so we return the values.
+				for i, v := range rx {
+					ev, err := convertValue(v)
+					if err != nil {
+						return err
+					}
+					dest[i] = ev
 				}
-				dest[i] = ev
+				return nil
 			}
 			// failsafe
 			return nil
