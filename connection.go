@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 
 	"github.com/IngwiePhoenix/surrealdb-driver/api"
 	"github.com/IngwiePhoenix/surrealdb-driver/config"
@@ -28,11 +29,21 @@ var _ driver.ConnPrepareContext = (*SurrealConn)(nil)
 var _ driver.NamedValueChecker = (*SurrealConn)(nil)
 var _ driver.ValueConverter = (*SurrealConn)(nil)
 var _ driver.Pinger = (*SurrealConn)(nil)
+var _ driver.ExecerContext = (*SurrealConn)(nil)
+var _ driver.QueryerContext = (*SurrealConn)(nil)
 
 // Execute directly on the underlying WebSockets connection by utilizing the
 // raw API objects.
 func (con *SurrealConn) execObj(req *api.Request) (any, error) {
 	con.Driver.LogInfo("Conn:execObj start", req)
+
+	// For debugging only
+	str, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	} else {
+		con.Driver.LogInfo("Conn:execObj sending: ", string(str))
+	}
 
 	if err := con.WSClient.WriteJSON(req); err != nil {
 		con.Driver.LogInfo("Conn:execObj, writeJSON error", err)
@@ -177,9 +188,39 @@ func (con *SurrealConn) ExecContext(ctx context.Context, sql string, args []driv
 	default:
 		mappedValues := map[string]interface{}{}
 		for _, v := range args {
-			mappedValues[v.Name] = v.Value
+			var key string
+			if len(v.Name) == 0 || v.Name == "" {
+				key = "_" + strconv.Itoa(v.Ordinal)
+			} else {
+				key = "_" + v.Name
+			}
+			con.Driver.LogInfo("Conn:ExecContext valueing: ", key, " O: ", v.Ordinal, " N: ", v.Name, " V: ", v.Value)
+			mappedValues[key] = v.Value
 		}
 		return con.execWithArgs(sql, mappedValues)
+	}
+}
+
+// QueryContext implements driver.QueryerContext.
+func (con *SurrealConn) QueryContext(ctx context.Context, sql string, args []driver.NamedValue) (driver.Rows, error) {
+	con.Driver.LogInfo("Conn:ExecContext start", ctx, sql, args)
+	// TODO: Use the provided context
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		mappedValues := map[string]interface{}{}
+		for _, v := range args {
+			var key string
+			if len(v.Name) == 0 || v.Name == "" {
+				key = "_" + strconv.Itoa(v.Ordinal)
+			} else {
+				key = "_" + v.Name
+			}
+			con.Driver.LogInfo("Conn:ExecContext valueing: ", key, " O: ", v.Ordinal, " N: ", v.Name, " V: ", v.Value)
+			mappedValues[key] = v.Value
+		}
+		return con.queryWithArgs(sql, mappedValues)
 	}
 }
 

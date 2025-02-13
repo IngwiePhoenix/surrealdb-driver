@@ -4,10 +4,9 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"hash/fnv"
-	"reflect"
 	"strings"
+	"time"
 
 	"github.com/IngwiePhoenix/surrealdb-driver/api"
 	st "github.com/IngwiePhoenix/surrealdb-driver/surrealtypes"
@@ -25,44 +24,56 @@ import (
 // > Drivers may wish to return ErrSkip after they have exhausted their own special cases.
 // (via: https://pkg.go.dev/database/sql/driver#NamedValueChecker)
 func checkNamedValue(value any) (driver.Value, error) {
-	r := reflect.ValueOf(value)
-	fmt.Printf("!! converting: %T\n", value)
-
-	switch r.Kind() {
-	case reflect.Ptr:
-		if r.IsNil() {
-			return nil, nil
-		} else {
-			return checkNamedValue(r.Elem().Interface())
-		}
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return r.Int(), nil
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return r.Uint(), nil
-	case reflect.Float32, reflect.Float64:
-		return r.Float(), nil
-	case reflect.Bool:
-		return r.Bool(), nil
-	case reflect.Slice:
-		fmt.Printf("!! 2nd converting: %s\n", r.Type().Elem().Kind())
-		switch t := r.Type(); {
-		case t == reflect.TypeOf(json.RawMessage{}):
-			return value, nil
-		case t.Elem().Kind() == reflect.Uint8:
-			return r.Bytes(), nil
-		/*case t.Elem().Kind() == reflect.String:
-		var strSlice []string
-		for i := 0; i < r.Len(); i++ {
-			strSlice = append(strSlice, r.Index(i).String())
-		}
-		return &strSlice, nil*/
-		default:
-			return nil, fmt.Errorf("unsupported type %T, a slice of %s", value, t.Elem().Kind())
-		}
-	case reflect.String:
-		return r.String(), nil
+	// Edge case handling
+	switch v := value.(type) {
+	case time.Time:
+		return &st.DateTime{Time: v}, nil
 	}
-	return nil, fmt.Errorf("unsupported type %T, a %s", value, r.Kind())
+
+	return value, nil
+	//bytes, err := json.Marshal(value)
+	//fmt.Println("!! CONVERTED: ", string(bytes))
+	//return string(bytes), err
+	/*
+		r := reflect.ValueOf(value)
+		fmt.Printf("!! converting: %T\n", value)
+
+		switch r.Kind() {
+		case reflect.Ptr:
+			if r.IsNil() {
+				return nil, nil
+			} else {
+				return checkNamedValue(r.Elem().Interface())
+			}
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return r.Int(), nil
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return r.Uint(), nil
+		case reflect.Float32, reflect.Float64:
+			return r.Float(), nil
+		case reflect.Bool:
+			return r.Bool(), nil
+		case reflect.Slice:
+			fmt.Printf("!! 2nd converting: %s\n", r.Type().Elem().Kind())
+			switch t := r.Type(); {
+			case t == reflect.TypeOf(json.RawMessage{}):
+				return value, nil
+			case t.Elem().Kind() == reflect.Uint8:
+				return r.Bytes(), nil
+			/*case t.Elem().Kind() == reflect.String:
+			var strSlice []string
+			for i := 0; i < r.Len(); i++ {
+				strSlice = append(strSlice, r.Index(i).String())
+			}
+			return &strSlice, nil/
+			default:
+				return nil, fmt.Errorf("unsupported type %T, a slice of %s", value, t.Elem().Kind())
+			}
+		case reflect.String:
+			return r.String(), nil
+		}
+		return nil, fmt.Errorf("unsupported type %T, a %s", value, r.Kind())
+	*/
 }
 
 func assertJsonType(data json.RawMessage) string {
