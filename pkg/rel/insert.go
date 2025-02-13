@@ -32,25 +32,34 @@ func (i Insert) WriteInsertInto(buffer *builder.Buffer, table string) {
 }
 
 func (i Insert) WriteValues(buffer *builder.Buffer, mutates map[string]rel.Mutate) {
+	// Maps and order are kind of a thing...
+	var fields []string
+	for k := range mutates {
+		fields = append(fields, k)
+	}
+
 	n := 0
 	buffer.WriteString(" (")
-	for field, mut := range mutates {
+	for _, field := range fields {
+		mut := mutates[field]
 		if mut.Type != rel.ChangeInvalidOp {
-			buffer.WriteEscape(field)
 			if n > 0 {
 				buffer.WriteString(", ")
 			}
+			buffer.WriteEscape(field)
 			n = n + 1
 		}
 	}
+
 	buffer.WriteString(") VALUES (")
 	n = 0
-	for _, mut := range mutates {
+	for _, field := range fields {
+		mut := mutates[field]
 		if mut.Type != rel.ChangeInvalidOp {
-			buffer.WriteValue(mut.Value)
 			if n > 0 {
 				buffer.WriteString(", ")
 			}
+			buffer.WriteValue(mut.Value)
 			n = n + 1
 		}
 	}
@@ -73,16 +82,29 @@ func (i Insert) WriteOnConflict(buffer *builder.Buffer, mutates map[string]rel.M
 	}
 	if realMutates > 0 {
 		buffer.WriteString(" ON DUPLICATE KEY UPDATE ")
+		var i int = 0
 		for field, mutate := range mutates {
+			if mutate.Type == rel.ChangeInvalidOp {
+				continue
+			}
+			if i > 0 {
+				buffer.WriteString(", ")
+			}
 			// TODO: escape
 			buffer.WriteString(field)
 			// TODO: I am guessing hard here.
-			if mutate.Type == rel.ChangeIncOp {
-				buffer.WriteString(" += ")
-			} else if mutate.Type == rel.ChangeFragmentOp {
+			switch mutate.Type {
+			case rel.ChangeFragmentOp:
+				buffer.WriteValue(mutate.Value)
+			case rel.ChangeSetOp:
 				buffer.WriteString(" = ")
+				buffer.WriteValue(mutate.Value)
+			case rel.ChangeIncOp:
+				// TODO: "inc" probably isn't just... this.
+				buffer.WriteString(" += ")
+				buffer.WriteValue(mutate.Value)
 			}
-			buffer.WriteValue(mutate.Value)
+			i++
 		}
 	}
 }
