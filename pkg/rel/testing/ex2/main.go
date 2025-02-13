@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -93,7 +94,9 @@ func main() {
 
 	// Logging
 	repo.Instrumentation(func(ctx context.Context, op, message string, args ...interface{}) func(err error) {
-		log.Printf("[LOG] (%s) %s : %v\n", op, message, args)
+		log.Printf("[LOG] (%s) %s : ", op, message)
+		log.Print(args...)
+		log.Print("\n")
 		return func(err error) {
 			if err == nil {
 				return
@@ -112,7 +115,7 @@ func main() {
 		DEFINE FIELD IF NOT EXISTS title ON processes TYPE string;
 		DEFINE FIELD IF NOT EXISTS description ON processes TYPE string;
 		DEFINE FIELD IF NOT EXISTS created_at ON processes TYPE datetime;
-		DEFINE FIELD IF NOT EXISTS created_at ON processes TYPE datetime;
+		DEFINE FIELD IF NOT EXISTS updated_at ON processes TYPE datetime;
 		DEFINE FIELD IF NOT EXISTS responsible ON processes TYPE array<string>;
 		DEFINE FIELD IF NOT EXISTS legal_basis ON processes TYPE array<string>;
 		DEFINE FIELD IF NOT EXISTS risks ON processes TYPE array<string>;
@@ -125,7 +128,7 @@ func main() {
 
 	// Let's make an empty process and try to insert.
 	lohnabrechnung := Process{
-		ID:           "processes:lohnabrechnung",
+		ID:           "Lohnabrechnung",
 		Title:        "Lohnabrechnung",
 		Description:  "Beispiel der Lohnabrechnung",
 		CreatedAt:    time.Now(),
@@ -141,13 +144,12 @@ func main() {
 	repo.MustInsert(ctx, &lohnabrechnung)
 	log.Println("Inserted data")
 
-	/*
-		var process []Process
-		repo.MustFindAll(
-			context.Background(),
-			&process,
-			rel.From("process"),
-		)
-		fmt.Println(process)
-	*/
+	var procs []Process
+	repo.MustFindAll(ctx, &procs)
+	fmt.Println(procs)
+	fmt.Println(procs[0].ID)
+	fmt.Println(len(procs))
+	for _, p := range procs {
+		fmt.Println(p.ID)
+	}
 }
