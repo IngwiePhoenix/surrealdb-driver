@@ -2,6 +2,7 @@ package rel
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -10,6 +11,7 @@ type Quote struct{}
 // IDs in SurrealDB are literally a string, same for the column.
 // No idea what the MySQL driver is doing differently here?...
 func (q Quote) ID(name string) string {
+	fmt.Println("!! QUOTER: ID", name)
 	bytes, err := json.Marshal(name)
 	if err != nil {
 		panic(err.Error())
@@ -22,9 +24,14 @@ func (q Quote) ID(name string) string {
 // Wouldn't surprise me if there was a JSON quoter... but on the other hand,
 // I don't really need anything else. o.o
 func (q Quote) Value(v interface{}) string {
+	fmt.Println("!! QUOTER: Value", v)
+	return fmt.Sprintf("%v", v)
+	/*if s, ok := v.(interface{ String() string }); ok {
+		return s.String()
+	}
 	b, err := json.Marshal(v)
 	if err != nil {
 		panic(err.Error())
 	}
-	return string(b)
+	return string(b)*/
 }
