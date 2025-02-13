@@ -101,14 +101,14 @@ func (r *SurrealResult) RowsAffected() (int64, error) {
 		if res.Result != nil {
 			return 1, nil
 		}
-		return -1, errors.New("Single NoSQL response had no object")
+		return -1, errors.New("a Single NoSQL response had no object")
 
 	case api.MultiNoSQLResponse:
 		res := r.RawResult.(api.MultiNoSQLResponse)
 		if res.Result != nil {
 			return int64(len(*res.Result)), nil
 		}
-		return -1, errors.New("Multi NoSQL response had no objects")
+		return -1, errors.New("a Multi NoSQL response had no objects")
 
 	default:
 		return 0, fmt.Errorf("can not grab ID from %T", r.RawResult)

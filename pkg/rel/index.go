@@ -25,7 +25,7 @@ func (i Index) Build(index rel.Index) string {
 		buffer.WriteTable(index.Table)
 		buffer.WriteString(" ON FIELDS ")
 		for i, c := range index.Columns {
-			buffer.WriteField(index.Table, c)
+			buffer.WriteEscape(c)
 			if i > 0 {
 				buffer.WriteString(", ")
 			}

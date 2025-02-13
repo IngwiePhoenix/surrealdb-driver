@@ -47,7 +47,7 @@ func (q Query) WriteSelect(buffer *builder.Buffer, table string, selectQuery rel
 		/*if selectQuery.OnlyDistinct {
 			buffer.WriteString("array::distinct(")
 		}*/
-		buffer.WriteField(table, "*")
+		buffer.WriteByte('*')
 		/*if selectQuery.OnlyDistinct {
 			buffer.WriteString(")")
 		}*/
@@ -62,7 +62,7 @@ func (q Query) WriteSelect(buffer *builder.Buffer, table string, selectQuery rel
 
 	l := len(selectQuery.Fields) - 1
 	for i, f := range selectQuery.Fields {
-		buffer.WriteField(table, f)
+		buffer.WriteEscape(f)
 
 		if i < l {
 			buffer.WriteByte(',')
@@ -150,7 +150,7 @@ func (q Query) WriteGroupBy(buffer *builder.Buffer, table string, fields []strin
 
 	l := len(fields) - 1
 	for i, f := range fields {
-		buffer.WriteField(table, f)
+		buffer.WriteEscape(f)
 
 		if i < l {
 			buffer.WriteByte(',')
@@ -182,7 +182,7 @@ func (q Query) WriteOrderBy(buffer *builder.Buffer, table string, orders []rel.S
 			buffer.WriteString(", ")
 		}
 
-		buffer.WriteField(table, order.Field)
+		buffer.WriteEscape(order.Field)
 
 		// TODO: Implement COLLATE, NUMERIC and RAND()
 		if order.Asc() {

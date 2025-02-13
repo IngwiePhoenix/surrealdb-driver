@@ -1,7 +1,6 @@
 package surrealtypes
 
 import (
-	"database/sql"
 	"encoding/json"
 	"math/big"
 	"strings"
@@ -27,21 +26,21 @@ type SurrealDBType interface {
 // ## Simple
 // ### basic
 type Any = any
-type Bool = sql.NullBool
-type Bytes = []sql.NullBool
-type String = sql.NullString
+type Bool = bool
+type Bytes = []byte
+type String = string
 
 // ### numbers
-type Int = sql.Null[int]
-type Float = sql.NullFloat64
+type Int = int
+type Float = float64
 
 // ### Date and time
-type DateTime = sql.NullTime
+type DateTime = time.Time
 
 //type Duration = sql.Null[time.Duration]
 
 // ### Objects
-type Geometry = sql.Null[geojson.Geometry]
+type Geometry = geojson.Geometry
 type Object = map[string]interface{}
 type Literal = any       // TODO: Go has no type unions...so what do?
 type Range = any         // TODO: this needs a custom type

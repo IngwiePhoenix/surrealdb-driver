@@ -7,6 +7,7 @@ import (
 
 	_ "github.com/IngwiePhoenix/surrealdb-driver"
 	srel "github.com/IngwiePhoenix/surrealdb-driver/pkg/rel"
+	st "github.com/IngwiePhoenix/surrealdb-driver/surrealtypes"
 	"github.com/go-rel/rel"
 )
 
@@ -19,9 +20,10 @@ func main() {
 	defer adapter.Close()
 
 	repo := rel.New(adapter)
-	i1, i2 := repo.MustExec(context.Background(), "INFO FOR ROOT;")
-	log.Println(i1)
-	log.Println(i2)
+	affected, lastidx := repo.MustExec(context.Background(), "INFO FOR ROOT;")
+	log.Println(affected)
+	log.Println(lastidx)
+
 	sql := rel.SQL("INFO FOR ROOT;")
 	cursor, err := adapter.Query(context.TODO(), rel.Query{
 		SQLQuery: sql,
@@ -30,6 +32,7 @@ func main() {
 		log.Println("Could not query")
 		log.Fatal(err.Error())
 	}
+
 	fields, err := cursor.Fields()
 	if err != nil {
 		log.Println("Failed to get fields")
@@ -37,6 +40,7 @@ func main() {
 	}
 	fmt.Println(fields)
 
+<<<<<<< HEAD
 	// It makes sense to cast into the "native" adapter; but also,
 	// this unironically makes testing the finalized queries... harder.
 	// Gonna see if I can PR against rel.Adapter to include a flat string builder.
@@ -45,4 +49,50 @@ func main() {
 	str, vals := surrealAdapter.QueryBuilder.Build(b)
 	fmt.Println(str)
 	fmt.Println(vals)
+=======
+	// Attempt to decode into a struct
+	var out struct {
+		// accesses namespaces nodes system users
+		Accesses   st.Object
+		Namespaces st.Object
+		Nodes      st.Object
+		System     st.Object
+		Users      st.Object
+	}
+	sql = rel.SQL("INFO FOR ROOT;")
+	err = repo.Find(context.Background(), &out, sql)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	fmt.Println(out)
+	fmt.Println(out.System["available_parallelism"])
+
+	// Let's try making stuff.
+	var schema rel.Schema
+	schema.CreateTableIfNotExists("rel_version_tbl", func(t *rel.Table) {
+		t.ID("id")
+		t.BigInt("version", rel.Unsigned(true), rel.Unique(true), rel.Required(true))
+		t.DateTime("created_at")
+		t.DateTime("updated_at")
+		t.Column("data", "record<other>")
+	})
+	tbl := schema.Migrations[0].(rel.Table)
+	surrealAdapter := adapter.(*srel.SurrealDB)
+	str := surrealAdapter.TableBuilder.Build(tbl)
+	fmt.Println(str)
+
+	/*
+		m := migration.New(repo)
+		m.Register(
+			1, // Version
+			func(s *rel.Schema) {
+				// up
+				s.CreateTable()
+			},
+			func(s *rel.Schema) {
+				// down
+			},
+		)
+	*/
+>>>>>>> c030c2b27a11ffd9b3a1d502979a9f77b1ed7c34
 }

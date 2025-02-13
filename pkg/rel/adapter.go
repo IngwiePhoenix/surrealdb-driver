@@ -2,6 +2,7 @@ package rel
 
 import (
 	db "database/sql"
+	"strings"
 
 	"github.com/go-rel/rel"
 	"github.com/go-rel/sql"
@@ -22,7 +23,7 @@ func New(database *db.DB) rel.Adapter {
 			ArgumentPlaceholder: "?",
 			BoolTrueValue:       "TRUE",
 			BoolFalseValue:      "FALSE",
-			Quoter:              builder.Quote{},
+			Quoter:              Quote{},
 			ValueConverter:      ValueConvert{},
 		}
 		filterBuilder = Filter{}
@@ -56,12 +57,16 @@ func New(database *db.DB) rel.Adapter {
 		}
 		tableBuilder = Table{
 			BufferFactory: ddlBufferFactory,
+			DefinitionFilter: func(table rel.Table, def rel.TableDefinition) bool {
+				if field, ok := def.(rel.Column); ok {
+					return strings.ToLower(field.Name) != "id"
+				}
+				// Skip other stuff.
+				return true
+			},
 		}
 		indexBuilder = Index{
 			BufferFactory: ddlBufferFactory,
-			//Query:            ddlQueryBuilder,
-			//Filter:           filterBuilder,
-			//DropIndexOnTable: true,
 		}
 	)
 
