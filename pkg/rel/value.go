@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+var _ (driver.ValueConverter) = (*ValueConvert)(nil)
+
 type ValueConvert struct{}
 
 func (c ValueConvert) stringifySlice(s []string) (string, error) {

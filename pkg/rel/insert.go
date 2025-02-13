@@ -2,6 +2,7 @@ package rel
 
 import (
 	"github.com/go-rel/rel"
+	"github.com/go-rel/sql"
 	"github.com/go-rel/sql/builder"
 )
 
@@ -11,6 +12,8 @@ type Insert struct {
 	ReturningPrimaryValue bool
 	InsertDefaultValues   bool
 }
+
+var _ (sql.InsertBuilder) = (*Insert)(nil)
 
 // Build sql query and its arguments.
 func (i Insert) Build(table string, primaryField string, mutates map[string]rel.Mutate, onConflict rel.OnConflict) (string, []any) {

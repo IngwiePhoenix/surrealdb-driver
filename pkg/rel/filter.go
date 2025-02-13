@@ -29,6 +29,8 @@ import (
 	-
 */
 
+//var _ (sql.Filter) = (*Filter)(nil)
+
 // Filter builder.
 type Filter struct{}
 

@@ -2,8 +2,11 @@ package rel
 
 import (
 	"github.com/go-rel/rel"
+	"github.com/go-rel/sql"
 	"github.com/go-rel/sql/builder"
 )
+
+var _ (sql.DeleteBuilder) = (*Delete)(nil)
 
 // Delete builder.
 type Delete struct {

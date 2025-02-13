@@ -4,9 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/go-rel/sql/builder"
 )
 
 type Quote struct{}
+
+var _ (builder.Quoter) = (*Quote)(nil)
 
 // IDs in SurrealDB are literally a string, same for the column.
 // No idea what the MySQL driver is doing differently here?...

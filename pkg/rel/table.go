@@ -2,6 +2,7 @@ package rel
 
 import (
 	"github.com/go-rel/rel"
+	"github.com/go-rel/sql"
 	"github.com/go-rel/sql/builder"
 )
 
@@ -11,6 +12,8 @@ type (
 	//DropKeyMapper       func(rel.KeyType) string
 	DefinitionFilter func(table rel.Table, def rel.TableDefinition) bool
 )
+
+var _ (sql.TableBuilder) = (*Table)(nil)
 
 // Table builder.
 type Table struct {

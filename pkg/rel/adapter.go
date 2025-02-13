@@ -14,6 +14,8 @@ type SurrealDB struct {
 	sql.SQL
 }
 
+var _ (rel.Adapter) = (*SurrealDB)(nil)
+
 // Name of database type this adapter implements.
 const Name string = "surrealdb"
 

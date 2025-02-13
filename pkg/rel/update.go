@@ -2,6 +2,7 @@ package rel
 
 import (
 	"github.com/go-rel/rel"
+	"github.com/go-rel/sql"
 	"github.com/go-rel/sql/builder"
 )
 
@@ -11,6 +12,8 @@ type Update struct {
 	Query         builder.QueryWriter
 	Filter        Filter
 }
+
+var _ (sql.UpdateBuilder) = (*Update)(nil)
 
 // Build SQL string and it arguments.
 func (u Update) Build(table string, primaryField string, mutates map[string]rel.Mutate, filter rel.FilterQuery) (string, []any) {
