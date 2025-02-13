@@ -35,7 +35,26 @@ type Int = int
 type Float = float64
 
 // ### Date and time
-type DateTime = time.Time
+type DateTime struct {
+	time.Time
+}
+
+func (n *DateTime) UnmarshalJSON(data []byte) error {
+	t, err := time.Parse(time.RFC3339, string(data))
+	if err != nil {
+		return err
+	}
+	n.Time = t
+	return nil
+}
+func (n *DateTime) MarshalJSON() ([]byte, error) {
+	tstr := []byte(n.Time.Format(time.RFC3339))
+	out := []byte{}
+	out = append(out, 'd', '"')
+	out = append(out, tstr...)
+	out = append(out, '"')
+	return out, nil
+}
 
 //type Duration = sql.Null[time.Duration]
 
