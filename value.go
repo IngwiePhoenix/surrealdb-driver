@@ -1,7 +1,6 @@
 package surrealdbdriver
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -55,24 +54,26 @@ func convertValue(input any) (any, error) {
 	// time.Time
 	if s, ok := input.(string); ok {
 		t, err := time.Parse(time.RFC3339Nano, s)
-		var parseErr *time.ParseError
-		if err != nil && !errors.As(err, &parseErr) {
-			return nil, err
+		if err == nil {
+			return t, nil
 		}
-		return t, nil
 	}
 
 	// time.Duration
 	if s, ok := input.(string); ok {
 		t, err := time.ParseDuration(s)
-		var parseErr *time.ParseError
-		if err != nil && !errors.As(err, &parseErr) {
-			return nil, err
+		if err == nil {
+			return st.Duration{Duration: t}, nil
 		}
-		return st.Duration{Duration: t}, nil
+	}
+
+	// Probably a real string
+	if s, ok := input.(string); ok {
+		return st.String(s), nil
 	}
 
 	// GeoJSON
+	// TODO: This one is difficult - it needs to adhere a schema.
 	if g, ok := input.(st.Geometry); ok {
 		return g, nil
 	}
@@ -152,8 +153,8 @@ func convertValue(input any) (any, error) {
 	}
 
 	// It's likely an object at this point.
-	if o, ok := input.(st.Object); ok {
-		out := map[string]any{}
+	if o, ok := input.(map[string]interface{}); ok {
+		out := st.Object{}
 		for key, value := range o {
 			v, err := convertValue(value)
 			if err != nil {

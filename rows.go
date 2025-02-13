@@ -14,11 +14,12 @@ import (
 
 // implements driver.Rows
 type SurrealRows struct {
-	conn         *SurrealConn
-	rawResult    any
-	resultIdx    int
-	entryIdx     int
-	foundColumns []string
+	conn          *SurrealConn
+	rawResult     any
+	resultIdx     int
+	entryIdx      int
+	hasMultiEntry bool
+	foundColumns  []string
 }
 
 var _ (driver.Rows) = (*SurrealRows)(nil)
@@ -151,7 +152,7 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 		res := rows.rawResult.(api.QueryResponse)
 		objs := *res.Result
 		rows.conn.Driver.LogInfo("Rows:next, grabbing: ", rows.resultIdx, len(objs))
-		if rows.resultIdx >= len(objs) {
+		if rows.resultIdx >= len(objs) && !rows.hasMultiEntry {
 			rows.conn.Driver.LogInfo("Rows:next, Done reading: ", rows.resultIdx, len(objs))
 			return io.EOF
 		} else {
@@ -161,7 +162,9 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 		qres := objs[rows.resultIdx]
 		obj := qres.Result
 		defer func() {
-			rows.resultIdx = rows.resultIdx + 1
+			if !rows.hasMultiEntry {
+				rows.resultIdx = rows.resultIdx + 1
+			}
 		}()
 
 		if qres.Status != "OK" {
@@ -173,22 +176,25 @@ func (rows *SurrealRows) Next(dest []driver.Value) error {
 			rows.conn.Driver.LogInfo("Rows:next, Handle st.Object")
 			return handleResult(r)
 		} else if r, ok := obj.([]interface{}); ok {
-			rows.conn.Driver.LogInfo("Rows:next, Handle []st.Object?")
+			rows.conn.Driver.LogInfo("Rows:next, Handle []st.Object? ", len(r), rows.entryIdx)
 			// Check if we are on a good entry
 			if rows.entryIdx >= len(r) {
+				rows.resultIdx = rows.resultIdx + 1
 				return io.EOF
 			}
 
 			// Increment the entry index
+			entry := r[rows.entryIdx]
 			defer func() {
 				rows.entryIdx++
 			}()
-			entry := r[rows.entryIdx]
 
 			if rx, ok := entry.(map[string]interface{}); ok {
+				rows.hasMultiEntry = true
 				rows.conn.Driver.LogInfo("Rows:next, Handle []st.Object, indeed!")
 				return handleResult(rx)
 			} else if rx, ok := entry.([]interface{}); ok {
+				rows.hasMultiEntry = false
 				rows.conn.Driver.LogInfo("Rows:next, Handle []interface{} (values)")
 				// .Columns() has returned "valies", so do we.
 				// Each column is just the index number, so we return the values.
