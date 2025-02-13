@@ -35,7 +35,9 @@ type Int = int
 type Float = float64
 
 // ### Date and time
-type DateTime struct {
+type DateTime = time.Time
+
+/*type DateTime struct {
 	time.Time
 }
 
@@ -54,7 +56,7 @@ func (n *DateTime) MarshalJSON() ([]byte, error) {
 	out = append(out, tstr...)
 	out = append(out, '"')
 	return out, nil
-}
+}*/
 
 //type Duration = sql.Null[time.Duration]
 

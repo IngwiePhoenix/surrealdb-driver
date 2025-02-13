@@ -6,7 +6,6 @@ import (
 	"errors"
 	"hash/fnv"
 	"strings"
-	"time"
 
 	"github.com/IngwiePhoenix/surrealdb-driver/api"
 	st "github.com/IngwiePhoenix/surrealdb-driver/surrealtypes"
@@ -24,12 +23,6 @@ import (
 // > Drivers may wish to return ErrSkip after they have exhausted their own special cases.
 // (via: https://pkg.go.dev/database/sql/driver#NamedValueChecker)
 func checkNamedValue(value any) (driver.Value, error) {
-	// Edge case handling
-	switch v := value.(type) {
-	case time.Time:
-		return &st.DateTime{Time: v}, nil
-	}
-
 	return value, nil
 	//bytes, err := json.Marshal(value)
 	//fmt.Println("!! CONVERTED: ", string(bytes))
