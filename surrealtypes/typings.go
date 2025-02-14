@@ -28,7 +28,35 @@ type SurrealDBType interface {
 type Any = any
 type Bool = bool
 type Bytes = []byte
+
 type String = string
+type StringArray = []string
+
+/*type StringArray struct {
+	StrVals []string
+}
+
+var _ (sql.Scanner) = (*StringArray)(nil)
+
+func (s *StringArray) Append(str string) {
+	s.StrVals = append(s.StrVals, str)
+}
+
+func (s *StringArray) Scan(src interface{}) error {
+	fmt.Println("!! StringArray: scan")
+
+	// Check if the source is a byte slice (common for SQL drivers)
+	if raw, ok := src.([]byte); ok {
+		// Unmarshal the byte slice into the StrVals field (which is a []string)
+		if err := json.Unmarshal(raw, &s.StrVals); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// Handle the case where the source is an unsupported type
+	return fmt.Errorf("unsupported type for scan: %T", src)
+}*/
 
 // ### numbers
 type Int = int
