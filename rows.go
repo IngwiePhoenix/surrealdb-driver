@@ -267,4 +267,48 @@ func (r *SurrealRows) ColumnTypeLength(index int) (length int64, ok bool) {
 }
 func (r *SurrealRows) ColumnTypeDatabaseTypeName(index int) string {
 }
+
+var _ (driver.RowsColumnTypeScanType) = (*SurrealRows)(nil)
+
+func (rows *SurrealRows) ColumnTypeScanType(index int) reflect.Type {
+	switch rows.rawResult.(type) {
+	case api.QueryResponse:
+		res := rows.rawResult.(api.QueryResponse)
+		currId := rows.resultIdx
+
+		if currId >= len(*res.Result) {
+			panic("tried to read column past index")
+		}
+
+		currRow := (*res.Result)[currId]
+		if r, ok := currRow.Result.(map[string]interface{}); ok {
+			cols := rows.Columns()
+			colVal := r[cols[index]]
+			val, err := convertValue(colVal)
+			if err != nil {
+				panic("could not convert value: " + err.Error())
+			}
+			return reflect.TypeOf(val)
+		} else if r, ok := currRow.Result.([]interface{}); ok {
+			rows.conn.Driver.LogInfo("Rows:columns, Handling any in []interface{}")
+			cols := rows.Columns()
+			currRow := r[rows.resultIdx]
+			if rr, ok := currRow.(map[string]interface{}); ok {
+				colVal := rr[cols[index]]
+				val, err := convertValue(colVal)
+				if err != nil {
+					panic("could not convert value: " + err.Error())
+				}
+				return reflect.TypeOf(val)
+			} else {
+				return reflect.TypeOf(currRow)
+			}
+		} else {
+			// Assume a primitive
+			return reflect.TypeOf(currRow.Result)
+		}
+	}
+	return nil
+}
+
 */
