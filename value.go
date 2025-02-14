@@ -167,7 +167,8 @@ func convertValue(input any) (any, error) {
 
 	// Nothing matched, so we stringify it and hope for the best.
 	// very temporary solution, but I do need to get somewhere...
-	return json.Marshal(input)
+	bytes, err := json.Marshal(input)
+	return string(bytes), err
 
 	//panic(fmt.Sprintf("did not match anything for %T", input))
 }
