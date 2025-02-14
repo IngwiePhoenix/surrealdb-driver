@@ -8,6 +8,7 @@ import (
 
 	driver "github.com/IngwiePhoenix/surrealdb-driver"
 	srel "github.com/IngwiePhoenix/surrealdb-driver/pkg/rel"
+	"github.com/go-rel/rel"
 )
 
 type Entity struct {
@@ -67,12 +68,13 @@ type Process struct {
 	   Storage     []Storage    `json:"storage"`
 	   Tasks       []Task       `json:"tasks"`
 	*/
-	Responsible  []string `json:"responsible"`
-	LegalBasis   []string `json:"legal_basis"`
-	Risks        []string `json:"risks"`
-	Storage      []string `json:"storage"`
-	Tasks        []string `json:"tasks"`
+	Responsible  []string `db:"responsible"`
+	LegalBasis   []string `db:"legal_basis"`
+	Risks        []string `db:"risks"`
+	Storage      []string `db:"storage"`
+	Tasks        []string `db:"tasks"`
 	AffectedData []string `db:"affected_data"`
+	//AffectedEntitys []string `db:"affected_entitys"`
 }
 
 func main() {
@@ -82,7 +84,7 @@ func main() {
 	// context
 	ctx := context.Background()
 
-	adapter, err := srel.Open("ws://root:root@127.0.0.1:8000/rpc?method=root&db=dsbt&ns=dsbt")
+	adapter, err := srel.Open("ws://db:db@127.0.0.1:8000/rpc?method=root&db=dsbt&ns=dsbt")
 	if err != nil {
 		log.Println("Could not make adapter")
 		log.Fatal(err.Error())
@@ -106,46 +108,48 @@ func main() {
 	})
 
 	// Write schemas if they do not exist
-	sql := `
-		DEFINE NAMESPACE IF NOT EXISTS dsbt;
-		USE NS dsbt;
-		DEFINE DATABASE IF NOT EXISTS dsbt;
-		USE DB dsbt;
-		DEFINE TABLE IF NOT EXISTS processes SCHEMAFULL;
-		DEFINE FIELD IF NOT EXISTS title ON processes TYPE string;
-		DEFINE FIELD IF NOT EXISTS description ON processes TYPE string;
-		DEFINE FIELD IF NOT EXISTS created_at ON processes TYPE datetime;
-		DEFINE FIELD IF NOT EXISTS updated_at ON processes TYPE datetime;
-		DEFINE FIELD IF NOT EXISTS responsible ON processes TYPE array<string>;
-		DEFINE FIELD IF NOT EXISTS legal_basis ON processes TYPE array<string>;
-		DEFINE FIELD IF NOT EXISTS risks ON processes TYPE array<string>;
-		DEFINE FIELD IF NOT EXISTS storage ON processes TYPE array<string>;
-		DEFINE FIELD IF NOT EXISTS tasks ON processes TYPE array<string>;
-		DEFINE FIELD IF NOT EXISTS affected_data ON processes TYPE array<string>;
-	`
-	affected, lastidx := repo.MustExec(ctx, sql)
-	log.Println("Ran query", affected, lastidx)
+	/*
+		sql := `
+			DEFINE NAMESPACE IF NOT EXISTS dsbt;
+			USE NS dsbt;
+			DEFINE DATABASE IF NOT EXISTS dsbt;
+			USE DB dsbt;
+			DEFINE TABLE IF NOT EXISTS processes SCHEMAFULL;
+			DEFINE FIELD IF NOT EXISTS title ON processes TYPE string;
+			DEFINE FIELD IF NOT EXISTS description ON processes TYPE string;
+			DEFINE FIELD IF NOT EXISTS created_at ON processes TYPE datetime;
+			DEFINE FIELD IF NOT EXISTS updated_at ON processes TYPE datetime;
+			DEFINE FIELD IF NOT EXISTS responsible ON processes TYPE array<string>;
+			DEFINE FIELD IF NOT EXISTS legal_basis ON processes TYPE array<string>;
+			DEFINE FIELD IF NOT EXISTS risks ON processes TYPE array<string>;
+			DEFINE FIELD IF NOT EXISTS storage ON processes TYPE array<string>;
+			DEFINE FIELD IF NOT EXISTS tasks ON processes TYPE array<string>;
+			DEFINE FIELD IF NOT EXISTS affected_data ON processes TYPE array<string>;
+		`
+		affected, lastidx := repo.MustExec(ctx, sql)
+		log.Println("Ran query", affected, lastidx)
 
-	// Let's make an empty process and try to insert.
-	lohnabrechnung := Process{
-		ID:           "Lohnabrechnung",
-		Title:        "Lohnabrechnung",
-		Description:  "Beispiel der Lohnabrechnung",
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-		Responsible:  []string{"Alex", "Daniel"},
-		LegalBasis:   []string{"GOB", "Wirtschaft"},
-		Risks:        []string{"Datendiebstahl", "Ausnutzung"},
-		Storage:      []string{"NAS", "Aktenschrank"},
-		Tasks:        []string{"Einholen der Bankdaten"},
-		AffectedData: []string{"Kontoinformationen"},
-	}
+		// Let's make an empty process and try to insert.
+		lohnabrechnung := Process{
+			ID:           "Lohnabrechnung2",
+			Title:        "Lohnabrechnung",
+			Description:  "Beispiel der Lohnabrechnung",
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
+			Responsible:  []string{"Alex", "Daniel"},
+			LegalBasis:   []string{"GOB", "Wirtschaft"},
+			Risks:        []string{"Datendiebstahl", "Ausnutzung"},
+			Storage:      []string{"NAS", "Aktenschrank"},
+			Tasks:        []string{"Einholen der Bankdaten"},
+			AffectedData: []string{"Kontoinformationen"},
+		}
 
-	repo.MustInsert(ctx, &lohnabrechnung)
-	log.Println("Inserted data")
-
+		repo.MustInsert(ctx, &lohnabrechnung)
+		log.Println("Inserted data")
+	*/
 	var procs []Process
-	repo.MustFindAll(ctx, &procs)
+	//adapter.Query(ctx, rel.From("process").Select("*"))
+	repo.MustFindAll(ctx, &procs, rel.From("process"))
 	fmt.Println(procs)
 	fmt.Println(procs[0].ID)
 	fmt.Println(len(procs))
