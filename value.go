@@ -1,7 +1,7 @@
 package surrealdbdriver
 
 import (
-	"fmt"
+	"encoding/json"
 	"reflect"
 	"time"
 
@@ -165,5 +165,9 @@ func convertValue(input any) (any, error) {
 		return out, nil
 	}
 
-	panic(fmt.Sprintf("did not match anything for %T", input))
+	// Nothing matched, so we stringify it and hope for the best.
+	// very temporary solution, but I do need to get somewhere...
+	return json.Marshal(input)
+
+	//panic(fmt.Sprintf("did not match anything for %T", input))
 }
