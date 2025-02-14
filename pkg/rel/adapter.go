@@ -22,7 +22,7 @@ const Name string = "surrealdb"
 func New(database *db.DB) rel.Adapter {
 	var (
 		bufferFactory = builder.BufferFactory{
-			InlineValues:        true,
+			InlineValues:        false,
 			ArgumentPlaceholder: "$_",
 			ArgumentOrdinal:     true,
 			BoolTrueValue:       "TRUE",

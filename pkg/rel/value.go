@@ -29,7 +29,7 @@ func (c ValueConvert) stringifySlice(s []string) (string, error) {
 func (c ValueConvert) ConvertValue(v interface{}) (driver.Value, error) {
 	fmt.Printf("!! ValueConvert/rel called: %T\n", v)
 	if d, ok := v.(time.Time); ok {
-		return `d"` + d.Format(time.RFC3339) + `"`, nil
+		return `d'` + d.Format(time.RFC3339) + `'`, nil
 	} else if s, ok := v.(string); ok {
 		fmt.Println("!! Left it a string.")
 		return "\"" + s + "\"", nil
