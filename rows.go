@@ -3,23 +3,26 @@ package surrealdbdriver
 import (
 	"database/sql/driver"
 	"errors"
-	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strconv"
 
 	"github.com/IngwiePhoenix/surrealdb-driver/api"
-	st "github.com/IngwiePhoenix/surrealdb-driver/surrealtypes"
+	"github.com/clok/kemba"
+	"github.com/tidwall/gjson"
 )
 
 // implements driver.Rows
 type SurrealRows struct {
 	conn          *SurrealConn
-	rawResult     any
+	RawResult     *api.Response
 	resultIdx     int
 	entryIdx      int
 	hasMultiEntry bool
 	foundColumns  []string
+	k             *kemba.Kemba
+	e             *Debugger
 }
 
 var _ (driver.Rows) = (*SurrealRows)(nil)
@@ -27,288 +30,298 @@ var _ (driver.Rows) = (*SurrealRows)(nil)
 //var _ driver.RowsColumnTypeScanType
 
 func (rows *SurrealRows) Close() error {
+	k := rows.k.Extend("Close")
+	k.Log("bye!")
 	if !rows.conn.IsValid() {
 		return driver.ErrBadConn
 	}
 	return rows.conn.Close()
 }
 
-func (rows *SurrealRows) Columns() (cols []string) {
-	// Short-circuit
-	if len(rows.foundColumns) > 0 {
-		return rows.foundColumns
-	}
+func (r *SurrealRows) Columns() (cols []string) {
+	k := r.k.Extend("Columns")
 
-	handleSingleQueryObj := func(r st.Object) []string {
+	getKeyFromObjs := func(o gjson.Result) []string {
 		out := []string{}
-		for k := range r {
-			out = append(out, k)
-		}
-		sort.Strings(out)
+		o.ForEach(func(key, _ gjson.Result) bool {
+			out = append(out, key.String())
+			return true
+		})
 		return out
 	}
 
-	switch rows.rawResult.(type) {
-	case api.QueryResponse:
-		res := rows.rawResult.(api.QueryResponse)
-		currId := rows.resultIdx
-
-		if currId >= len(*res.Result) {
-			// Should we panic? -- Yes, we actually probably should.
-			rows.conn.Driver.LogInfo("Rows:columns, Early exit?!")
-			return []string{}
-		}
-
-		currRow := (*res.Result)[currId]
-		if r, ok := currRow.Result.(map[string]interface{}); ok {
-			rows.conn.Driver.LogInfo("Rows:columns, Handling st.Object")
-			cols = handleSingleQueryObj(r)
-			rows.foundColumns = cols
-			return cols
-		} else if r, ok := currRow.Result.([]interface{}); ok {
-			rows.conn.Driver.LogInfo("Rows:columns, Handling any in []interface{}")
-			seen := map[string]bool{}
-			for k, v := range r {
-				if r, ok := v.(map[string]interface{}); ok {
-					rows.conn.Driver.LogInfo("Rows:columns, Handling st.Object, in array")
-					for _, c := range handleSingleQueryObj(r) {
-						if !seen[c] {
-							seen[c] = true
-							cols = append(cols, c)
-						}
-					}
-				} else {
-					c := strconv.Itoa(k)
-					if !seen[c] {
-						seen[c] = true
-						cols = append(cols, c)
-					}
-				}
+	dedupeKeys := func(keys []string) []string {
+		seen := map[string]bool{}
+		out := []string{}
+		for _, key := range keys {
+			if !seen[key] {
+				seen[key] = true
 			}
-			rows.foundColumns = cols
-			return cols
-		} else {
-			// Assume a primitive
+		}
+		for key := range seen {
+			out = append(out, key)
+		}
+		return out
+	}
+
+	if r.RawResult.Method == api.APIMethodQuery {
+		k.Log("handling query")
+		v := r.RawResult.Result
+		out := []string{}
+
+		// Case: The result isn't an object or array.
+		if v.Type != gjson.JSON {
+			k.Log("result not an array, early skip")
+			// {result: "string", status, time}
 			return []string{"value"}
 		}
 
-	// Technically not the output of a query,
-	// but this might come in handy.
-	case api.InfoResponse:
-		// Contains an object, so grab keys.
-		// Also prevent overspin
-		if rows.resultIdx > 0 {
-			panic("attempting to over-index an InfoResponse in Columns")
-		}
-		res := rows.rawResult.(api.InfoResponse)
-		obj := res.Result
-		cols = handleSingleQueryObj(*obj)
-		rows.foundColumns = cols
-		return cols
+		if v.IsArray() {
+			// [{result: [{...},{...},{...}], status, time}
+			k := k.Extend("isArray")
 
-	case api.RelationResponse:
-		if rows.resultIdx > 0 {
-			panic("attempting to over-index a RelationResponse in Columns")
-		}
-		res := rows.rawResult.(api.RelationResponse)
-		cols = append(cols, []string{"id", "in", "out"}...)
-		obj := *res.Result
-		for k := range obj.Values {
-			cols = append(cols, k)
-		}
-		sort.Strings(cols)
-		rows.foundColumns = cols
-		return cols
+			// Valid query ("SELECT * FROM x" etc.)
+			keylists := v.Get("@this.#(status==\"OK\")#.result.@join.@keys")
+			k.Log("keylists:", keylists) // [[keys...], [keys...]]
+			seen := map[string]bool{}
+			keylists.ForEach(func(_, value gjson.Result) bool {
+				value.ForEach(func(key, value gjson.Result) bool {
+					sv := value.String()
+					if !seen[sv] {
+						seen[sv] = true
+					}
+					return true
+				})
+				return true
+			})
 
-	// TODO: Every other response kind...
+			for key := range seen {
+				out = append(out, key)
+			}
 
-	default:
-		panic(fmt.Sprintf("tried to get columns for %T, which isn't supported", rows.rawResult))
+			if len(out) == 1 && out[0] == "" {
+				k.Log("must've been a result set of primitives?")
+				out = []string{"value"}
+			}
+
+			k.Log("got:", out)
+		} else if v.IsObject() {
+			k := k.Extend("isObject")
+			k.Log("attempting to get keys")
+			for _, k := range v.Get("@keys").Array() {
+				out = append(out, k.String())
+			}
+		} else {
+			k.Log("neither object nor array, assuming primitive", v)
+			out = []string{"value"}
+		}
+		sort.Strings(out)
+		k.Log("returning", out)
+		return out
+	} else if slices.Contains([]api.APIMethod{
+		api.APIMethodCreate,
+		api.APIMethodInsert,
+		api.APIMethodUpdate,
+		api.APIMethodUpsert,
+		api.APIMethodRelate,
+		api.APIMethodMerge,
+	}, r.RawResult.Method) {
+		k.Log("handling CRUD")
+		fullOut := []string{}
+
+		if r.RawResult.Result.IsObject() {
+			k.Log("single object")
+			fullOut = getKeyFromObjs(r.RawResult.Result)
+			sort.Strings(fullOut)
+			return fullOut
+		} else if r.RawResult.Result.IsArray() {
+			k.Log("array...of objects?")
+			out := []string{}
+			shouldSkip := false
+
+			r.RawResult.Result.ForEach(func(_, value gjson.Result) bool {
+				if !value.IsObject() {
+					k.Log("not everything is an object, skip")
+					shouldSkip = true
+					return false
+				}
+				out = append(out, getKeyFromObjs(r.RawResult.Result)...)
+				return true
+			})
+
+			if !shouldSkip {
+				k.Log("did not skip array, it's legit")
+				out = dedupeKeys(out)
+				sort.Strings(fullOut)
+				return fullOut
+			}
+		}
+	} else if r.RawResult.Result.IsArray() {
+		k.Log("handling array")
+		out := []string{}
+		for i := range r.RawResult.Result.Array() {
+			out = append(out, strconv.Itoa(i))
+		}
+		return out
 	}
-	//panic("reached end of Columns() unexpectedly")
+
+	// fallthrough
+	return []string{"value"}
+
 }
 
-func (rows *SurrealRows) Next(dest []driver.Value) error {
-	handleResult := func(entry st.Object) error {
-		rows.conn.Driver.LogInfo("Rows:next, current row: ", rows.resultIdx, entry)
-		cols := rows.Columns()
-		for i, v := range cols {
-			rows.conn.Driver.LogInfo("Rows:next, 2nd level iteration: ", i, v)
-			dv, err := convertValue(entry[v])
-			if err != nil {
-				rows.conn.Driver.LogInfo("Rows:next, Saw error: ", err.Error())
-				return err
-			}
-			dest[i] = dv
-		}
+func (r *SurrealRows) Next(dest []driver.Value) error {
+	k := r.k.Extend("Next")
 
-		// Technically an error won't really happen here but, just in case.
-		// I should probably consider using recover()...?
+	makeErr := func(o gjson.Result) error {
+		if o.Get("status").String() != "OK" {
+			k.Log("saw error", o.Get("result"))
+			return errors.New(o.Get("result").String())
+		}
 		return nil
 	}
 
-	switch rows.rawResult.(type) {
-	case api.QueryResponse:
-		res := rows.rawResult.(api.QueryResponse)
-		objs := *res.Result
-		rows.conn.Driver.LogInfo("Rows:next, grabbing: ", rows.resultIdx, len(objs))
-		if rows.resultIdx >= len(objs) && !rows.hasMultiEntry {
-			rows.conn.Driver.LogInfo("Rows:next, Done reading: ", rows.resultIdx, len(objs))
-			return io.EOF
-		} else {
-			rows.conn.Driver.LogInfo("Rows:next, STILL reading")
-		}
-
-		qres := objs[rows.resultIdx]
-		obj := qres.Result
-		defer func() {
-			if !rows.hasMultiEntry {
-				rows.resultIdx = rows.resultIdx + 1
-			}
-		}()
-
-		if qres.Status != "OK" {
-			msg := obj.(string)
-			return errors.New(msg)
-		}
-
-		if r, ok := obj.(map[string]interface{}); ok {
-			rows.conn.Driver.LogInfo("Rows:next, Handle st.Object")
-			return handleResult(r)
-		} else if r, ok := obj.([]interface{}); ok {
-			rows.conn.Driver.LogInfo("Rows:next, Handle []st.Object? ", len(r), rows.entryIdx)
-			// Check if we are on a good entry
-			if rows.entryIdx >= len(r) {
-				rows.resultIdx = rows.resultIdx + 1
-				return io.EOF
-			}
-
-			// Increment the entry index
-			entry := r[rows.entryIdx]
-			defer func() {
-				rows.entryIdx++
-			}()
-
-			if rx, ok := entry.(map[string]interface{}); ok {
-				rows.hasMultiEntry = true
-				rows.conn.Driver.LogInfo("Rows:next, Handle []st.Object, indeed!")
-				return handleResult(rx)
-			} else if rx, ok := entry.([]interface{}); ok {
-				rows.hasMultiEntry = false
-				rows.conn.Driver.LogInfo("Rows:next, Handle []interface{} (values)")
-				// .Columns() has returned "valies", so do we.
-				// Each column is just the index number, so we return the values.
-				for i, v := range rx {
-					ev, err := convertValue(v)
-					if err != nil {
-						return err
-					}
-					dest[i] = ev
-				}
-				return nil
-			}
-			// failsafe
-			return nil
-		} else {
-			rows.conn.Driver.LogInfo("Rows:next, Handle anything else (value)")
-			// .Columns() has returned "value"
-			ev, err := convertValue(obj)
-			if err != nil {
-				return err
-			}
-			dest[0] = ev
-			return nil
-		}
-
-	case api.InfoResponse:
-		r := rows.rawResult.(api.InfoResponse)
-		re, err := convertValue(r.Result)
+	putValueInDest := func(i int, col string, v gjson.Result) error {
+		k := k.Extend("putValueInDest")
+		x, err := convertValue(v)
 		if err != nil {
+			k.Printf("%s: error: %s", err.Error())
 			return err
 		}
-		dest[0] = re
+		k.Printf("%s: dest[%d] = %s", col, i, v.Type.String())
+		dest[i] = x
 		return nil
-
-	case api.RelationResponse:
-		if rows.resultIdx > 0 {
-			panic("attempting to over-index an InfoResponse in Columns")
-		}
-		res := rows.rawResult.(api.RelationResponse)
-		r := *res.Result
-		cols := rows.Columns()
-		for i, colName := range cols {
-			switch colName {
-			case "id":
-				dest[i] = r.ID
-			case "in":
-				dest[i] = r.In
-			case "out":
-				dest[i] = r.Out
-			default:
-				dest[i] = r.Values[colName]
-			}
-		}
-		// Increment to trigger the other short-circuits
-		rows.resultIdx = rows.resultIdx + 1
-		return nil
-
-	// TODO: All the other response types...
-
-	default:
-		panic(fmt.Sprintf("tried to call Next() for %T, which isn't supported", rows.rawResult))
 	}
 
-	//panic("reached end of next() unexpectedly")
-}
+	setDest := func(o gjson.Result) error {
+		k := k.Extend("setDest")
 
-/*
-func (r *SurrealRows) ColumnTypeLength(index int) (length int64, ok bool) {
-
-}
-func (r *SurrealRows) ColumnTypeDatabaseTypeName(index int) string {
-}
-
-var _ (driver.RowsColumnTypeScanType) = (*SurrealRows)(nil)
-
-func (rows *SurrealRows) ColumnTypeScanType(index int) reflect.Type {
-	switch rows.rawResult.(type) {
-	case api.QueryResponse:
-		res := rows.rawResult.(api.QueryResponse)
-		currId := rows.resultIdx
-
-		if currId >= len(*res.Result) {
-			panic("tried to read column past index")
-		}
-
-		currRow := (*res.Result)[currId]
-		if r, ok := currRow.Result.(map[string]interface{}); ok {
-			cols := rows.Columns()
-			colVal := r[cols[index]]
-			val, err := convertValue(colVal)
-			if err != nil {
-				panic("could not convert value: " + err.Error())
+		for i, col := range r.Columns() {
+			k.Log("col:", col)
+			v := o.Get(col)
+			k.Log("col val:", o, v)
+			if err := putValueInDest(i, col, v); err != nil {
+				return err
 			}
-			return reflect.TypeOf(val)
-		} else if r, ok := currRow.Result.([]interface{}); ok {
-			rows.conn.Driver.LogInfo("Rows:columns, Handling any in []interface{}")
-			cols := rows.Columns()
-			currRow := r[rows.resultIdx]
-			if rr, ok := currRow.(map[string]interface{}); ok {
-				colVal := rr[cols[index]]
-				val, err := convertValue(colVal)
-				if err != nil {
-					panic("could not convert value: " + err.Error())
+		}
+		return nil
+	}
+
+	if r.RawResult.Method == api.APIMethodQuery {
+		k.Log("handling query")
+
+		v := r.RawResult.Result
+		idx := r.resultIdx
+		edx := r.entryIdx
+
+		if v.IsArray() {
+			/* r.RawResult.Result =
+			[
+				{
+					"result": {
+						"life": 42,
+						"testWords": ["foo","bar","baz"]
+					},
+					"status": "OK",
+					"time":"39.8µs"
 				}
-				return reflect.TypeOf(val)
-			} else {
-				return reflect.TypeOf(currRow)
+			]
+			*/
+			k.Log("array of results, using result", idx)
+			l := len(v.Array())
+			if idx >= l {
+				k.Log("end")
+				return io.EOF
 			}
-		} else {
-			// Assume a primitive
-			return reflect.TypeOf(currRow.Result)
+			defer func() {
+				k.Log("trigger resultIdx++ (query)")
+				r.resultIdx++
+			}()
+			v := v.Array()[idx] // -> object{ result: object|[]object, status, time }
+
+			if err := makeErr(v); err != nil {
+				return err
+			}
+
+			if v.Get("result").IsArray() {
+				k.Log("array of results, with an array of results, using entry", edx)
+				if err := makeErr(v); err != nil {
+					return err
+				}
+				// Drop down into result array
+				v := v.Get("result")
+				l := len(v.Array())
+				if edx >= l {
+					// from previous iteration; wrap around
+					edx = 0
+					r.entryIdx = 0
+				}
+				// Drop down to current index
+				v = v.Array()[edx]
+				return setDest(v)
+			} else if v.Get("result").IsObject() {
+				k.Log("array of results with a single object")
+				if err := makeErr(v); err != nil {
+					return err
+				}
+				return setDest(v.Get("result"))
+			} else {
+				k.Log("result[].result != object|[]object")
+				return putValueInDest(0, "value", v.Get("result"))
+			}
+		} else if v.IsObject() {
+			return setDest(v)
 		}
+	} else if slices.Contains([]api.APIMethod{
+		api.APIMethodCreate,
+		api.APIMethodInsert,
+		api.APIMethodUpdate,
+		api.APIMethodUpsert,
+		api.APIMethodRelate,
+		api.APIMethodMerge,
+	}, r.RawResult.Method) {
+		k.Log("handling CRUD")
+
+		v := r.RawResult.Result
+		if v.IsObject() {
+			if r.resultIdx > 0 {
+				return io.EOF
+			}
+			return setDest(v)
+		} else if v.IsArray() {
+			l := len(v.Array())
+			if r.resultIdx >= l {
+				return io.EOF
+			}
+			defer func() {
+				k.Log("trigger resultIdx++ (CRUD)")
+				r.resultIdx++
+			}()
+			return setDest(v.Array()[r.resultIdx])
+		}
+	} else if r.RawResult.Result.IsArray() {
+		k.Log("handling plain array")
+
+		v := r.RawResult.Result
+		l := len(v.Array())
+		if r.resultIdx >= l {
+			return io.EOF
+		}
+		defer func() {
+			k.Log("trigger resultIdx++ (array...?)")
+			r.resultIdx++
+		}()
+		return setDest(v.Array()[r.resultIdx])
 	}
+
+	if r.resultIdx > 0 {
+		return io.EOF
+	}
+	v := r.RawResult.Result
+	x, err := convertValue(v)
+	if err != nil {
+		return err
+	}
+	dest[0] = x
 	return nil
 }
-
-*/

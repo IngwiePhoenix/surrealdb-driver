@@ -3,12 +3,16 @@ package surrealdbdriver
 import (
 	"context"
 	"database/sql/driver"
+
+	"github.com/clok/kemba"
 )
 
 // implements driver.Stmt
 type SurrealStmt struct {
 	conn  *SurrealConn
 	query string
+	k     *kemba.Kemba
+	e     *Debugger
 }
 
 // Checking interface compatibility per intellisense
@@ -19,6 +23,7 @@ var _ driver.NamedValueChecker = (*SurrealStmt)(nil)
 var _ driver.ValueConverter = (*SurrealStmt)(nil)
 
 func (stmt *SurrealStmt) Close() error {
+	stmt.k.Extend("Close").Log("bye")
 	if !stmt.conn.IsValid() {
 		return driver.ErrBadConn
 	}
@@ -26,7 +31,7 @@ func (stmt *SurrealStmt) Close() error {
 }
 
 func (stmt *SurrealStmt) NumInput() int {
-	stmt.conn.Driver.LogInfo("stmt:NumInput called")
+	stmt.k.Extend("NumInput").Log("Called!")
 	// SurrealDB uses LET $<key> = <value>
 	// ... so, we actually, literally, don't know. o.o
 	// Technically we could count the number of $-signs, but that would be misleading,
@@ -36,7 +41,7 @@ func (stmt *SurrealStmt) NumInput() int {
 }
 
 func (stmt *SurrealStmt) Exec(args []driver.Value) (driver.Result, error) {
-	stmt.conn.Driver.LogInfo("stmt:Exec called")
+	stmt.k.Extend("Exec").Log("Called!")
 	mappedValues := map[string]interface{}{}
 	for key, v := range args {
 		mappedValues["_"+string(rune(key))] = v
@@ -46,7 +51,7 @@ func (stmt *SurrealStmt) Exec(args []driver.Value) (driver.Result, error) {
 
 // implements driver.StmtExecContext
 func (stmt *SurrealStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
-	stmt.conn.Driver.LogInfo("stmt:ExecContext called")
+	stmt.k.Extend("ExecContext").Log("Called!")
 	// TODO: Apply context to stmt.conn.WSClient
 	// NOTE: copying the default method here - not sure if values come in once in a while or not.
 	mappedValues := map[string]interface{}{}
@@ -57,7 +62,7 @@ func (stmt *SurrealStmt) ExecContext(ctx context.Context, args []driver.NamedVal
 }
 
 func (stmt *SurrealStmt) Query(args []driver.Value) (driver.Rows, error) {
-	stmt.conn.Driver.LogInfo("stmt:Query called")
+	stmt.k.Extend("Query").Log("Called!")
 	mappedValues := map[string]interface{}{}
 	for key, v := range args {
 		mappedValues["_"+string(rune(key))] = v
@@ -67,7 +72,7 @@ func (stmt *SurrealStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 // implements driver.StmtQueryContext
 func (stmt *SurrealStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
-	stmt.conn.Driver.LogInfo("stmt:QueryContext called")
+	stmt.k.Extend("QueryContext").Log("Called!")
 	// TODO: Apply context to stmt.conn.WSClient
 	// NOTE: copying the default method here - not sure if values come in once in a while or not.
 	mappedValues := map[string]interface{}{}
@@ -78,11 +83,12 @@ func (stmt *SurrealStmt) QueryContext(ctx context.Context, args []driver.NamedVa
 }
 
 func (stmt *SurrealStmt) CheckNamedValue(nv *driver.NamedValue) (err error) {
-	stmt.conn.Driver.LogInfo("stmt:CheckNamedValue called")
+	stmt.k.Extend("CheckNamedValue").Log("Called!")
 	nv.Value, err = checkNamedValue(nv.Value)
 	return
 }
 
 func (stmt *SurrealStmt) ConvertValue(v any) (driver.Value, error) {
+	stmt.k.Extend("ConvertValue").Log("Called!")
 	return checkNamedValue(v)
 }

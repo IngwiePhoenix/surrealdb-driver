@@ -2,15 +2,12 @@ package surrealdbdriver_test
 
 import (
 	"database/sql"
-	"log"
+	"encoding/json"
 	"testing"
-
-	driver "github.com/IngwiePhoenix/surrealdb-driver"
 )
 
 func TestDriverCreation(t *testing.T) {
-	driver.SurrealDBDriver.SetLogger(log.Default())
-	db, err := sql.Open("surrealdb", "ws://db:db@localhost:8000/rpc?method=root&db=dsbt&ns=dsbt")
+	db, err := sql.Open("surrealdb", "ws://root:root@localhost:8000/rpc?method=root&db=dsbt&ns=dsbt")
 	if err != nil {
 		t.Error(err)
 	}
@@ -40,8 +37,8 @@ func TestDriverCreation(t *testing.T) {
 			t.Log("Error: ", err)
 
 			for res.Next() {
-				var accesses, namespaces, nodes, users any
-				err := res.Scan(&accesses, &namespaces, &nodes, &users)
+				var accesses, namespaces, nodes, system, users string
+				err := res.Scan(&accesses, &namespaces, &nodes, &system, &users)
 				t.Log("data: ", accesses, namespaces, nodes, users)
 				t.Log(err)
 				if err != nil {
@@ -86,11 +83,13 @@ func TestDriverCreation(t *testing.T) {
 
 			for res.Next() {
 				var life string
-				var testWords any
-				err := res.Scan(&life, &testWords)
+				var testWords_raw []byte
+				var testWords []string
+				err := res.Scan(&life, &testWords_raw)
+				t.Log("error:", err)
+				err = json.Unmarshal(testWords_raw, &testWords)
+				t.Log("error:", err)
 				t.Log("Results from scan:", life, testWords)
-				t.Logf("type: %T", testWords)
-				t.Log(err)
 				if err != nil {
 					break
 				}
@@ -113,11 +112,12 @@ func TestDriverCreation(t *testing.T) {
 		row := db.QueryRow("INFO FOR DB;")
 		if row.Err() != nil {
 			t.Fatal(err.Error())
+		} else {
+			// Blind shot straight into nowhere!
+			var a, b, c, d, e, f, g, h, i string
+			err := row.Scan(&a, &b, &c, &d, &e, &f, &g, &h, &i)
+			t.Log(a, b, c, d, e, f, g, h)
+			t.Log(err)
 		}
-		// Blind shot straight into nowhere!
-		var a, b, c, d, e, f, g, h interface{}
-		row.Scan(&a, &b, &c, &d, &e, &f, &g, &h)
-		t.Log(a, b, c, d, e, f, g, h)
-		t.Log(row)
 	})
 }

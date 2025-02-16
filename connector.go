@@ -8,6 +8,7 @@ import (
 
 	"github.com/IngwiePhoenix/surrealdb-driver/api"
 	"github.com/IngwiePhoenix/surrealdb-driver/config"
+	"github.com/clok/kemba"
 	"github.com/gorilla/websocket"
 )
 
@@ -16,33 +17,41 @@ type SurrealConnector struct {
 	Creds  *config.Credentials
 	Dialer *websocket.Dialer
 	driver *SurrealDriver
+	k      *kemba.Kemba
+	e      *Debugger
 }
 
 var _ driver.Connector = (*SurrealConnector)(nil)
 
 func (c *SurrealConnector) Connect(ctx context.Context) (driver.Conn, error) {
-	c.driver.LogInfo("Connector:Connect start", c.Creds.GetDBUrl())
+	k := c.k.Extend("Connect")
+
+	k.Log("start", c.Creds.GetDBUrl())
+
 	headers := http.Header{}
 	headers.Add("Content-Type", "application/json")
 	headers.Add("Accept", "application/json")
 	headers.Add("Sec-WebSocket-Protocol", "json") // why x.x
+
 	conn, resp, err := c.Dialer.DialContext(ctx, c.Creds.GetDBUrl(), headers)
-	if err != nil {
-		c.driver.LogInfo("Connector:Connect error", err, resp)
+	if c.e.Debug(err) {
 		return nil, err
 	}
-	c.driver.LogInfo("Connector:Connect http response", resp)
+	k.Log("http response", resp)
 	if resp.StatusCode != 200 && resp.StatusCode != 101 {
 		return nil, errors.New("SurrealDB's initial response was not 200/101: " + resp.Status)
 	}
+	connk := localKemba.Extend("connection")
 	con := &SurrealConn{
 		WSClient: conn,
 		Driver:   c.driver,
 		Caller:   api.MakeCaller(),
 		creds:    c.Creds,
+		k:        connk,
+		e:        makeErrorLogger(connk),
 	}
-	if err = con.performLogin(); err != nil {
-		c.driver.LogInfo("Connector:Connect, signin error: ", err)
+
+	if err = con.performLogin(); c.e.Debug(err) {
 		return nil, err
 	}
 	return con, nil

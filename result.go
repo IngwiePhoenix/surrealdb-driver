@@ -2,15 +2,18 @@ package surrealdbdriver
 
 import (
 	"database/sql/driver"
-	"errors"
-	"fmt"
+	"slices"
 
 	"github.com/IngwiePhoenix/surrealdb-driver/api"
 	st "github.com/IngwiePhoenix/surrealdb-driver/surrealtypes"
+	"github.com/clok/kemba"
+	"github.com/tidwall/gjson"
 )
 
 type SurrealResult struct {
-	RawResult any
+	RawResult *api.Response
+	k         *kemba.Kemba
+	e         *Debugger
 }
 
 var _ driver.Result = (*SurrealResult)(nil)
@@ -21,96 +24,73 @@ var _ driver.Result = (*SurrealResult)(nil)
 // ...so I hotchpotch'd one. Yay. -.-
 // Also! How the heck do I handle this? Just literally the last one...?
 func (r *SurrealResult) LastInsertId() (int64, error) {
-	switch r.RawResult.(type) {
-	case api.QueryResponse:
-		qres := (*r.RawResult.(api.QueryResponse).Result)
-		i := 0
-		if len(qres) > 1 {
-			// TODO: Should be a warning.
-			i = len(qres) - 1
-		}
-		res := qres[i]
-
-		if res.Status != "OK" {
-			message := res.Result.(string)
-			return 0, errors.New(message)
-		}
-		if r, ok := res.Result.(st.Object); ok {
-			// Do we even _have_ an ID?
-			idStr, ok := r["id"].(string)
-			if !ok {
-				// No id, bail.
-				return -1, nil
-			}
-			rid, err := st.NewRecordIDFromString(idStr)
-			if err != nil {
-				return 0, err
-			}
-			idhash := int64(stringToHash(rid.String()))
-			return idhash, nil
+	k := r.k.Extend("LastInsertID")
+	var rid string = ""
+	if r.RawResult.Method == api.APIMethodQuery {
+		k.Log("handling query")
+		v := r.RawResult.Result.Array()
+		l := len(v)
+		k.Log("length", l)
+		k.Log("v:", r.RawResult.Result)
+		tid := v[l-1].Get("id")
+		if tid.Exists() {
+			rid = tid.String()
 		} else {
-			// Ok, so this is likely a random query.
-			// What the fuck am I supposed to do here?
-			return -1, nil
+			// INFO FOR...
+			rid = "-2"
 		}
-
-	case api.SingleNoSQLResponse:
-		res := r.RawResult.(api.SingleNoSQLResponse)
-		if idValue, ok := (*res.Result)["id"]; ok {
-			id, err := idValue.(string)
-			if !err {
-				return 0, errors.New("could not get ID from NoSQL object")
+		k.Log("rid", rid)
+	} else if slices.Contains([]api.APIMethod{
+		api.APIMethodCreate,
+		api.APIMethodInsert,
+		api.APIMethodUpdate,
+		api.APIMethodUpsert,
+		api.APIMethodRelate,
+		api.APIMethodMerge,
+	}, r.RawResult.Method) {
+		k.Log("handling CRUDs")
+		v := r.RawResult.Result
+		if v.IsArray() {
+			k.Log("CRUD is an array")
+			va := v.Array()
+			l := len(va)
+			rid = va[l-1].Get("id").String()
+		} else {
+			k.Log("CRUD is not an array")
+			if va := v.Get("id"); va.Exists() {
+				rid = va.String()
 			}
-			idhash := stringToHash(id)
-			return int64(idhash), nil
 		}
-		return 0, errors.New("tried to index a NoSQL result's id, but there was none")
-
-	case api.MultiNoSQLResponse:
-		res := (*r.RawResult.(api.MultiNoSQLResponse).Result)
-		if len(res) <= 0 {
-			return 0, errors.New("tried to index a multi-NoSQL result, that had no results")
-		}
-		innerRes := res[len(res)-1]
-		if idValue, ok := innerRes["id"]; ok {
-			id, err := idValue.(string)
-			if !err {
-				return 0, errors.New("could not get ID from NoSQL object")
-			}
-			idhash := stringToHash(id)
-			return int64(idhash), nil
-		}
-		return 0, errors.New("tried to index a Multi-NoSQL result's id, but there was none")
-
-	default:
-		return 0, fmt.Errorf("can not grab ID from %T", r.RawResult)
+	} else {
+		panic("the API method <" + string(r.RawResult.Method) + "> isn't implemented yet")
 	}
 
-	// Nothing else matched - so, we got nothing.
-	panic("unexpectedly reached end of LastInsertId() with " + fmt.Sprintf("%T", r.RawResult))
+	srid, err := st.ParseID(rid)
+	if err != nil {
+		return -1, err
+	}
+	idhash := int64(stringToHash(srid.SurrealString()))
+	return idhash, nil
 }
 
 func (r *SurrealResult) RowsAffected() (int64, error) {
-	switch r.RawResult.(type) {
-	case api.QueryResponse:
-		res := r.RawResult.(api.QueryResponse).Result
-		return int64(len(*res)), nil
-
-	case api.SingleNoSQLResponse:
-		res := r.RawResult.(api.SingleNoSQLResponse)
-		if res.Result != nil {
-			return 1, nil
-		}
-		return -1, errors.New("a Single NoSQL response had no object")
-
-	case api.MultiNoSQLResponse:
-		res := r.RawResult.(api.MultiNoSQLResponse)
-		if res.Result != nil {
-			return int64(len(*res.Result)), nil
-		}
-		return -1, errors.New("a Multi NoSQL response had no objects")
-
-	default:
-		return 0, fmt.Errorf("can not grab ID from %T", r.RawResult)
+	v := r.RawResult.Result
+	if r.RawResult.Method == api.APIMethodQuery {
+		return int64(len(v.Array())), nil
+	} else if v.IsArray() {
+		var objsFound int64 = 0
+		v.ForEach(func(_, value gjson.Result) bool {
+			if value.IsObject() && value.Get("id").Exists() {
+				objsFound++
+				return true
+			}
+			return false
+		})
+		return objsFound, nil
+	} else if v.Type == gjson.Null {
+		return 0, nil
 	}
+
+	// Everything else is one value, and one value only.
+	return 1, nil
 }
