@@ -22,7 +22,7 @@ func GenerateSecureID() RequestID {
 
 type Request struct {
 	ID     RequestID   `json:"id"`
-	Method string      `json:"method"`
+	Method APIMethod   `json:"method"`
 	Params interface{} `json:"params,omitempty"`
 }
 
