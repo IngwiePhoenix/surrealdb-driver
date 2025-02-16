@@ -91,7 +91,11 @@ func (r Repository) Iterate(ctx context.Context, query rel.Query, option ...rel.
 
 // MustAggregate implements rel.Repository.
 func (r Repository) MustAggregate(ctx context.Context, query rel.Query, aggregate string, field string) int {
-	return r.Repository.MustAggregate(ctx, query, aggregate, field)
+	count, err := r.Aggregate(ctx, query, aggregate, field)
+	if err != nil {
+		panic(err.Error())
+	}
+	return count
 }
 
 // MustCount implements rel.Repository.

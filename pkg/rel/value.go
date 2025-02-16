@@ -2,7 +2,7 @@ package rel
 
 import (
 	"database/sql/driver"
-	"encoding/json"
+	"github.com/goccy/go-json"
 	"fmt"
 	"strings"
 	"time"

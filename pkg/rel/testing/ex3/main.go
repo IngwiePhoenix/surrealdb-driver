@@ -6,8 +6,9 @@ import (
 	"log"
 	"time"
 
-	driver "github.com/IngwiePhoenix/surrealdb-driver"
+	_ "github.com/IngwiePhoenix/surrealdb-driver"
 	srel "github.com/IngwiePhoenix/surrealdb-driver/pkg/rel"
+	"github.com/go-rel/rel"
 )
 
 type Post struct {
@@ -17,9 +18,6 @@ type Post struct {
 }
 
 func main() {
-	// enable logging on the driver
-	driver.SurrealDBDriver.SetLogger(log.Default())
-
 	// context
 	ctx := context.Background()
 
@@ -30,7 +28,7 @@ func main() {
 	}
 	defer adapter.Close()
 
-	repo := srel.NewRepo(adapter) // Using SurrealDB adapter
+	repo := rel.New(adapter) // Using SurrealDB adapter
 
 	// Logging
 	repo.Instrumentation(func(ctx context.Context, op, message string, args ...interface{}) func(err error) {
@@ -54,6 +52,8 @@ func main() {
 		DEFINE TABLE IF NOT EXISTS posts SCHEMAFULL;
 		DEFINE FIELD IF NOT EXISTS title ON posts TYPE string;
 		DEFINE FIELD IF NOT EXISTS created_at ON posts TYPE datetime;
+		// Purposefuly leave it out.
+		DEFINE FIELD IF NOT EXISTS updated_at ON posts TYPE option<datetime>;
 	`
 	affected, lastidx := repo.MustExec(ctx, sql)
 	log.Println("Ran query", affected, lastidx)
