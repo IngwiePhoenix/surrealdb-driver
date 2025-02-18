@@ -114,3 +114,22 @@ func stringToHash(str string) uint64 {
 	h.Write([]byte(str))
 	return h.Sum64()
 }
+
+func isQueryResponse(o *gjson.Result) bool {
+	isValid := false
+	// 1. Is the result an array?
+	if o.IsArray() {
+		// 2. Is each element in the result a valid query response?
+		//    as in, does it have .result .time and .status ?
+		o.ForEach(func(_, v gjson.Result) bool {
+			if v.IsObject() {
+				for _, k := range v.Get("@keys").Array() {
+					k := k.String()
+					isValid = k == "id" || k == "result" || k == "time"
+				}
+			}
+			return isValid
+		})
+	}
+	return isValid
+}
