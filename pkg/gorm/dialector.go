@@ -2,7 +2,7 @@ package gorm
 
 import (
 	"database/sql"
-	"encoding/json"
+	"github.com/goccy/go-json"
 	"strconv"
 	"strings"
 

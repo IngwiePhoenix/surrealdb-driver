@@ -77,7 +77,7 @@ type Process struct {
 	Tasks        st.ArrayOf[string] `db:"tasks"`
 	AffectedData st.ArrayOf[string] `db:"affected_data"`
 	//AffectedEntitys []string `db:"affected_entitys"`
-	RelatedRisks []Risk `db:"risks_rel" ref:"id" fk:"id"`
+	RelatedRisks []Risk `db:"risks_rel" ref:"id" 	fk:"id"`
 }
 
 func main() {
