@@ -115,7 +115,7 @@ func (con *SurrealConn) execWithArgs(sql string, args map[string]interface{}) (d
 }
 
 func (con *SurrealConn) queryWithArgs(sql string, args map[string]interface{}) (driver.Rows, error) {
-	k := con.k.Extend("queryWithArgs")
+	k := con.k.Extend("")
 	k.Log("start", sql, args)
 	res, err := con.execObj(con.Caller.CallQuery(sql, args))
 	if con.e.Debug(err) {
