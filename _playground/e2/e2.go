@@ -1,15 +1,24 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 
 	_ "github.com/IngwiePhoenix/surrealdb-driver"
+	st "github.com/IngwiePhoenix/surrealdb-driver/surrealtypes"
+	"github.com/jmoiron/sqlx"
 )
 
 type Book struct {
 	ID    string
 	Title string
+}
+
+type Author struct {
+	Id      string
+	Name    string
+	Likes   st.ArrayOf[string]
+	Socials st.Object
+	Written st.Records[Book]
 }
 
 func main() {
@@ -25,9 +34,12 @@ func main() {
 		DEFINE TABLE IF NOT EXISTS authors SCHEMAFULL;
 		DEFINE FIELD IF NOT EXISTS name ON authors TYPE string;
 		DEFINE FIELD IF NOT EXISTS likes ON authors TYPE array<string>;
-		// DEFINE FIELD IF NOT EXISTS written ON author TYPE array<optional<record<books>>>
+		//DEFINE FIELD OVERWRITE socials ON authors FLEXIBLE TYPE object;
+		DEFINE FIELD OVERWRITE socials ON authors TYPE object;
+		DEFINE FIELD OVERWRITE socials.nostr ON authors TYPE string;
+		DEFINE FIELD OVERWRITE written ON authors TYPE option<array<record<books>>>;
 	`
-	db, err := sql.Open("surrealdb", "ws://db:db@localhost:8000/rpc?method=root&db=p2&ns=p2")
+	db, err := sqlx.Connect("surrealdb", "ws://db:db@localhost:8000/rpc?method=root&db=p2&ns=p2")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -39,15 +51,16 @@ func main() {
 	ins, _ := res.RowsAffected()
 	fmt.Println(ins)
 
-	/*res, err = db.Exec(`
-		CREATE books CONTENT {
+	_, _ = db.Exec(`
+		CREATE books:eragon CONTENT {
 			title: "The Eragon Book"
 		}
 	`)
-	if err != nil {
-		panic(err.Error())
-	}
-	fmt.Println(res)
+	/*
+		if err != nil {
+			panic(err.Error())
+		}
+		fmt.Println(res)
 	*/
 
 	/*rows, err := db.Query("SELECT * FROM books;")
@@ -70,18 +83,34 @@ func main() {
 		fmt.Println("----------")
 	}*/
 
-	/*res, err = db.Exec(`
+	res, err = db.Exec(`
+		DELETE authors:chris;
 		CREATE authors:chris CONTENT {
 			name: "Christopher",
-			likes: ["a", "lot", "of", "stuff"]
+			likes: ["a", "lot", "of", "stuff"],
+			socials: {
+				nostr: "foo@mynip05.org"
+			},
+			written: [
+				books:eragon
+			]
 		}
 	`)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
 	ins, _ = res.RowsAffected()
-	fmt.Println(ins)*/
-	rows, err := db.Query("SELECT * FROM authors;")
+	rid, _ := res.LastInsertId()
+	fmt.Println(ins, rid)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	rows, err := db.Queryx("SELECT * FROM authors FETCH written;")
 	if err != nil {
 		panic(err.Error())
 	}
+
 	for rows.Next() {
 		if rows.Err() != nil {
 			panic(rows.Err())
@@ -90,9 +119,18 @@ func main() {
 		if err != nil {
 			panic(err.Error())
 		}
+		a := Author{}
+
 		fmt.Println("----------")
 		fmt.Println(cols)
+		err = rows.StructScan(&a)
+		if err != nil {
+			panic(err.Error())
+		}
+		fmt.Println(a)
+		fmt.Println(a.Written.Get()[0].Get().Title)
 		fmt.Println("----------")
 	}
+
 	fmt.Println("end of program")
 }
