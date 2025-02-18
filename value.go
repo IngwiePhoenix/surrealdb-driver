@@ -53,3 +53,5 @@ func convertValue(input gjson.Result) (driver.Value, error) {
 	}
 	panic("convertValue: did fall through entirely")
 }
+
+//func surrealizeValue(in any) driver.Value {}

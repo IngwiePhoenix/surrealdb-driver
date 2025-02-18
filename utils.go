@@ -5,12 +5,10 @@ import (
 	"hash/fnv"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
-	"github.com/goccy/go-json"
-
 	"github.com/IngwiePhoenix/surrealdb-driver/api"
+	st "github.com/IngwiePhoenix/surrealdb-driver/surrealtypes"
 	"github.com/clok/kemba"
 	"github.com/tidwall/gjson"
 	"github.com/ztrue/tracerr"
@@ -55,35 +53,12 @@ func makeErrorLogger(k *kemba.Kemba) *Debugger {
 // > Drivers may wish to return ErrSkip after they have exhausted their own special cases.
 // (via: https://pkg.go.dev/database/sql/driver#NamedValueChecker)
 func checkNamedValue(value any) (driver.Value, error) {
-	if t, ok := value.(time.Time); ok {
+	if s, ok := value.(st.SurrealDBRecordID); ok {
+		return s.SurrealString(), nil
+	} else if t, ok := value.(time.Time); ok {
 		return `d'` + t.Format(time.RFC3339) + `'`, nil
 	}
 	return value, nil
-}
-
-func assertJsonType(data json.RawMessage) string {
-	trimmed := strings.TrimSpace(string(data)) // Remove leading/trailing whitespace
-	if len(trimmed) == 0 {
-		return "empty"
-	}
-
-	switch trimmed[0] {
-	case '{':
-		return "object"
-	case '[':
-		return "array"
-	case '"':
-		return "string"
-	case 't', 'f': // true or false
-		return "boolean"
-	case 'n': // null
-		return "null"
-	default:
-		if (trimmed[0] >= '0' && trimmed[0] <= '9') || trimmed[0] == '-' {
-			return "number"
-		}
-	}
-	return "unknown"
 }
 
 func validateResponse(method api.APIMethod, data []byte) (*api.Response, error) {
