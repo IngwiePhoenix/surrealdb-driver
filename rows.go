@@ -2,32 +2,43 @@ package surrealdbdriver
 
 import (
 	"database/sql/driver"
-	"errors"
+	"fmt"
 	"io"
-	"slices"
 	"sort"
-	"strconv"
 
 	"github.com/IngwiePhoenix/surrealdb-driver/api"
 	"github.com/clok/kemba"
+	"github.com/thoas/go-funk"
 	"github.com/tidwall/gjson"
 )
 
 // implements driver.Rows
 type SurrealRows struct {
-	conn          *SurrealConn
-	RawResult     *api.Response
-	resultIdx     int
-	entryIdx      int
-	hasMultiEntry bool
-	foundColumns  []string
-	k             *kemba.Kemba
-	e             *Debugger
+	conn          *SurrealConn     // Root driver
+	RawResult     *api.Response    // Original API response
+	resultIdx     int              // Current result to be iterated over.
+	entryIdx      int              // Current sub-result (rows in a query) to be iterated over.
+	hasMultiEntry bool             // mark that we have N responses of which at least one has M entries
+	foundColumns  []string         // Cache for columns
+	k             *kemba.Kemba     // Debug logger
+	e             *Debugger        // Error logger
+	realRows      []gjson.Result   // Gathered results to iterate over
+	isNormalized  bool             // Has this been normalized yet?
+	isColsIndexed bool             // have the columns been indexed yet?
+	realCols      map[int][]string // Columns per realRows
 }
 
 var _ (driver.Rows) = (*SurrealRows)(nil)
 
 //var _ driver.RowsColumnTypeScanType
+
+func (rows *SurrealRows) sanityCheck() {
+	if rows.RawResult.Method != api.APIMethodQuery {
+		msg := "SurrealRows does not support anything but query responses." +
+			" This one is of type: %s"
+		panic(fmt.Sprint(msg, rows.RawResult.Method))
+	}
+}
 
 func (rows *SurrealRows) Close() error {
 	k := rows.k.Extend("Close")
@@ -38,290 +49,121 @@ func (rows *SurrealRows) Close() error {
 	return rows.conn.Close()
 }
 
-func (r *SurrealRows) Columns() (cols []string) {
-	k := r.k.Extend("Columns")
+func (r *SurrealRows) Normalize() {
+	k := r.k.Extend("Normalize")
+	if r.isNormalized {
+		k.Log("early exit")
+		return
+	}
+	r.sanityCheck()
+	result := r.RawResult.Result
+	if !isQueryResponse(&result) {
+		panic("received invalid query!")
+	}
 
-	getKeyFromObjs := func(o gjson.Result) []string {
+	result.ForEach(func(i, value gjson.Result) bool {
+		k.Printf("Iterating through %d entry", i.Int())
+		inResult := value.Get("result")
+		if inResult.IsArray() {
+			inResult.ForEach(func(j, value gjson.Result) bool {
+				k.Printf("adding result entry: %v", j.Value())
+				entry := gjson.Parse(value.Raw)
+				r.realRows = append(r.realRows, entry)
+				return true
+			})
+		} else {
+			k.Println("'twas just one result, bop it in there")
+			entry := gjson.Parse(inResult.Raw)
+			r.realRows = append(r.realRows, entry)
+		}
+		return true
+	})
+	r.isNormalized = true
+}
+
+func (r *SurrealRows) Columns() (cols []string) {
+	r.sanityCheck()
+	if !isQueryResponse(&r.RawResult.Result) {
+		panic("can not get columns from non-query response: " + r.RawResult.Method)
+	}
+	if !r.isNormalized {
+		r.Normalize()
+	}
+	k := r.k.Extend("Columns")
+	if r.resultIdx >= len(r.realRows) {
+		k.Log("Should not be here (%v >= %v)", r.resultIdx, len(r.realRows))
+		return []string{}
+	}
+	if r.realCols == nil {
+		r.realCols = make(map[int][]string)
+	}
+
+	if xcols, ok := r.realCols[r.resultIdx]; ok {
+		k.Log("Found cacheed, returning")
+		return xcols
+	}
+
+	var grabKeys func(gjson.Result) []string
+	grabKeys = func(o gjson.Result) []string {
+		k := k.Extend("grabKeys")
+		k.Log("<- here")
 		out := []string{}
-		o.ForEach(func(key, _ gjson.Result) bool {
-			out = append(out, key.String())
+		root := gjson.Parse(o.Raw)
+		o.ForEach(func(key, value gjson.Result) bool {
+			k.Printf("iterate: %s = %s", key.String(), value.String())
+			//fmt.Println(key, "-> ", value.Path(original.Raw))
+			p := value.Path(root.Raw)
+			k.Printf("appending: %s", p)
+			out = append(out, p)
+			if value.Type == gjson.JSON {
+				k.Log("digging deeper") // dig baby dig /s
+				out = append(out, grabKeys(value)...)
+			}
 			return true
 		})
 		return out
 	}
 
-	dedupeKeys := func(keys []string) []string {
-		seen := map[string]bool{}
-		out := []string{}
-		for _, key := range keys {
-			if !seen[key] {
-				seen[key] = true
-			}
-		}
-		for key := range seen {
-			out = append(out, key)
-		}
-		return out
-	}
-
-	if r.RawResult.Method == api.APIMethodQuery {
-		k.Log("handling query")
-		v := r.RawResult.Result
-		out := []string{}
-
-		// Case: The result isn't an object or array.
-		if v.Type != gjson.JSON {
-			k.Log("result not an array, early skip")
-			// {result: "string", status, time}
-			return []string{"value"}
-		}
-
-		if v.IsArray() {
-			// [{result: [{...},{...},{...}], status, time}
-			k := k.Extend("isArray")
-
-			// Valid query ("SELECT * FROM x" etc.)
-			keylists := v.Get("@this.#(status==\"OK\")#.result.@join.@keys")
-			k.Log("keylists:", keylists) // [[keys...], [keys...]]
-			seen := map[string]bool{}
-			keylists.ForEach(func(_, value gjson.Result) bool {
-				value.ForEach(func(key, value gjson.Result) bool {
-					sv := value.String()
-					if !seen[sv] {
-						seen[sv] = true
-					}
-					return true
-				})
-				return true
-			})
-
-			for key := range seen {
-				out = append(out, key)
-			}
-
-			if len(out) == 1 && out[0] == "" {
-				k.Log("must've been a result set of primitives?")
-				out = []string{"value"}
-			}
-
-			k.Log("got:", out)
-		} else if v.IsObject() {
-			k := k.Extend("isObject")
-			k.Log("attempting to get keys")
-			for _, k := range v.Get("@keys").Array() {
-				out = append(out, k.String())
-			}
-		} else {
-			k.Log("neither object nor array, assuming primitive", v)
-			out = []string{"value"}
-		}
-		sort.Strings(out)
-		k.Log("returning", out)
-		return out
-	} else if slices.Contains([]api.APIMethod{
-		api.APIMethodCreate,
-		api.APIMethodInsert,
-		api.APIMethodUpdate,
-		api.APIMethodUpsert,
-		api.APIMethodRelate,
-		api.APIMethodMerge,
-	}, r.RawResult.Method) {
-		k.Log("handling CRUD")
-		fullOut := []string{}
-
-		if r.RawResult.Result.IsObject() {
-			k.Log("single object")
-			fullOut = getKeyFromObjs(r.RawResult.Result)
-			sort.Strings(fullOut)
-			return fullOut
-		} else if r.RawResult.Result.IsArray() {
-			k.Log("array...of objects?")
-			out := []string{}
-			shouldSkip := false
-
-			r.RawResult.Result.ForEach(func(_, value gjson.Result) bool {
-				if !value.IsObject() {
-					k.Log("not everything is an object, skip")
-					shouldSkip = true
-					return false
-				}
-				out = append(out, getKeyFromObjs(r.RawResult.Result)...)
-				return true
-			})
-
-			if !shouldSkip {
-				k.Log("did not skip array, it's legit")
-				out = dedupeKeys(out)
-				sort.Strings(fullOut)
-				return fullOut
-			}
-		}
-	} else if r.RawResult.Result.IsArray() {
-		k.Log("handling array")
-		out := []string{}
-		for i := range r.RawResult.Result.Array() {
-			out = append(out, strconv.Itoa(i))
-		}
-		return out
-	}
-
-	// fallthrough
-	return []string{"value"}
-
+	// Not in cache, so get, set and return.
+	k.Log("Uncached, processing new")
+	currRow := r.realRows[r.resultIdx]
+	cols = grabKeys(currRow)
+	sort.Strings(cols)
+	cols = funk.UniqString(cols)
+	//r.realCols[r.resultIdx] = []string{}
+	r.realCols[r.resultIdx] = cols
+	k.Log("stored:", cols)
+	return cols
 }
 
 func (r *SurrealRows) Next(dest []driver.Value) error {
 	k := r.k.Extend("Next")
 
-	makeErr := func(o gjson.Result) error {
-		if o.Get("status").String() != "OK" {
-			k.Log("saw error", o.Get("result"))
-			return errors.New(o.Get("result").String())
-		}
-		return nil
-	}
-
-	putValueInDest := func(i int, col string, v gjson.Result) error {
-		k := k.Extend("putValueInDest")
-		x, err := convertValue(v)
-		if err != nil {
-			k.Printf("%s: error: %s", err.Error())
-			return err
-		}
-		k.Printf("%s: dest[%d] = %s", col, i, v.Type.String())
-		dest[i] = x
-		return nil
-	}
-
-	setDest := func(o gjson.Result) error {
-		k := k.Extend("setDest")
-
-		for i, col := range r.Columns() {
-			k.Log("col:", col)
-			v := o.Get(col)
-			k.Log("col val:", o, v)
-			if err := putValueInDest(i, col, v); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	if r.RawResult.Method == api.APIMethodQuery {
-		k.Log("handling query")
-
-		v := r.RawResult.Result
-		idx := r.resultIdx
-		edx := r.entryIdx
-
-		if v.IsArray() {
-			/* r.RawResult.Result =
-			[
-				{
-					"result": {
-						"life": 42,
-						"testWords": ["foo","bar","baz"]
-					},
-					"status": "OK",
-					"time":"39.8µs"
-				}
-			]
-			*/
-			k.Log("array of results, using result", idx)
-			l := len(v.Array())
-			if idx >= l {
-				k.Log("end")
-				return io.EOF
-			}
-			defer func() {
-				k.Log("trigger resultIdx++ (query)")
-				r.resultIdx++
-			}()
-			v := v.Array()[idx] // -> object{ result: object|[]object, status, time }
-
-			if err := makeErr(v); err != nil {
-				return err
-			}
-
-			if v.Get("result").IsArray() {
-				k.Log("array of results, with an array of results, using entry", edx)
-				if err := makeErr(v); err != nil {
-					return err
-				}
-				// Drop down into result array
-				v := v.Get("result")
-				l := len(v.Array())
-				if edx >= l {
-					// from previous iteration; wrap around
-					edx = 0
-					r.entryIdx = 0
-				}
-				// Drop down to current index
-				v = v.Array()[edx]
-				return setDest(v)
-			} else if v.Get("result").IsObject() {
-				k.Log("array of results with a single object")
-				if err := makeErr(v); err != nil {
-					return err
-				}
-				return setDest(v.Get("result"))
-			} else {
-				k.Log("result[].result != object|[]object")
-				return putValueInDest(0, "value", v.Get("result"))
-			}
-		} else if v.IsObject() {
-			return setDest(v)
-		}
-	} else if slices.Contains([]api.APIMethod{
-		api.APIMethodCreate,
-		api.APIMethodInsert,
-		api.APIMethodUpdate,
-		api.APIMethodUpsert,
-		api.APIMethodRelate,
-		api.APIMethodMerge,
-	}, r.RawResult.Method) {
-		k.Log("handling CRUD")
-
-		v := r.RawResult.Result
-		if v.IsObject() {
-			if r.resultIdx > 0 {
-				return io.EOF
-			}
-			return setDest(v)
-		} else if v.IsArray() {
-			l := len(v.Array())
-			if r.resultIdx >= l {
-				return io.EOF
-			}
-			defer func() {
-				k.Log("trigger resultIdx++ (CRUD)")
-				r.resultIdx++
-			}()
-			return setDest(v.Array()[r.resultIdx])
-		}
-	} else if r.RawResult.Result.IsArray() {
-		k.Log("handling plain array")
-
-		v := r.RawResult.Result
-		l := len(v.Array())
-		if r.resultIdx >= l {
-			return io.EOF
-		}
-		defer func() {
-			k.Log("trigger resultIdx++ (array...?)")
-			r.resultIdx++
-		}()
-		return setDest(v.Array()[r.resultIdx])
-	}
-
-	if r.resultIdx > 0 {
+	if r.resultIdx >= len(r.realRows) {
+		k.Log("Reached end!")
 		return io.EOF
 	}
-	v := r.RawResult.Result
-	x, err := convertValue(v)
-	if err != nil {
-		return err
+
+	k.Log("deferring the increment")
+	defer func() {
+		k.Log("incrementing r.resultIdx")
+		r.resultIdx++
+	}()
+
+	// - foo
+	// - baz.derp
+	// - quix.0.name
+	currRow := r.realRows[r.resultIdx]
+	cols := r.Columns()
+	k.Log(cols)
+	for idx, path := range cols {
+		k.Printf("reading path '%s' into '%d'", path, idx)
+		v := currRow.Get(path)
+		if v.Exists() && v.Type != gjson.JSON {
+			vv := v.Value()
+			k.Printf("PUT \"%s\" dest[%d] = %v", path, idx, vv)
+			dest[idx] = vv
+		}
 	}
-	dest[0] = x
 	return nil
 }
