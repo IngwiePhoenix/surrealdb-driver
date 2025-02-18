@@ -50,7 +50,7 @@ func ParseID(in string) (SurrealDBRecordID, error) {
 			right = append(right, b)
 		}
 	}
-	k.Printf("Scanned <%s> : <%s>", left, right)
+	k.Printf("Scanned <%s> : <%s> (%s)", string(left), string(right), string(in))
 	if len(left) <= 0 || len(right) <= 0 {
 		return nil, fmt.Errorf("unaligned RecordID: %v, %v : %v", left, right, in)
 	}
