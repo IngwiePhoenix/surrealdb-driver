@@ -1,10 +1,12 @@
 package surrealtypes
 
 import (
-	"github.com/tidwall/gjson"
-
+	"github.com/clok/kemba"
 	geojson "github.com/paulmach/go.geojson"
 )
+
+// A small debug helper
+var localKemba = kemba.New("surrealdb:surrealtypes")
 
 //
 // # SurrealDB Type Mapping
@@ -31,11 +33,11 @@ type Float = float64
 //type Duration = sql.Null[time.Duration]
 
 // ### Objects
-type Object = gjson.Result
+// type Object = gjson.Result
 type Geometry = geojson.Geometry
-type Literal = []rune    // TODO: Go has no type unions...so what do?
-type Range = any         // TODO: this needs a custom type
-type Record = Object     // TODO: Actually, this isn't true. in json its string, in db its object!
+type Literal = []rune // TODO: Go has no type unions...so what do?
+type Range = any      // TODO: this needs a custom type
+// type Record = Object     // TODO: Actually, this isn't true. in json its string, in db its object!
 type Set = []interface{} // TODO: User specified, thus technically generic
 
 // ## Type Constraints

@@ -2,16 +2,11 @@ package surrealtypes
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 
+	"github.com/goccy/go-json"
 	"github.com/tidwall/gjson"
 )
-
-// ArrayOf is a generic type that implements JSON and SQL interfaces.
-type ArrayOf[T any] struct {
-	Values []T
-}
 
 /*
 // Generics can't adhere to an interface. sadge.
@@ -22,9 +17,18 @@ var _ sql.Scanner = (*ArrayOf[T])(nil)
 var _ SurrealMarshalable = (*ArrayOf[T])(nil)
 */
 
+// ArrayOf is a generic type that implements JSON and SQL interfaces.
+type ArrayOf[T any] struct {
+	Values []T
+}
+
+func NewArray[T any](obj []T) ArrayOf[T] {
+	return ArrayOf[T]{Values: obj}
+}
+
 // MarshalJSON implements json.Marshaler
 func (a ArrayOf[T]) MarshalJSON() ([]byte, error) {
-	return json.Marshal(a.Values)
+	return json.MarshalNoEscape(a.Values)
 }
 
 // UnmarshalJSON implements json.Unmarshaler
@@ -34,7 +38,7 @@ func (a *ArrayOf[T]) UnmarshalJSON(data []byte) error {
 
 // Value implements driver.Valuer, returning a JSON-encoded value.
 func (a ArrayOf[T]) Value() (driver.Value, error) {
-	return json.Marshal(a.Values)
+	return json.MarshalNoEscape(a.Values)
 }
 
 // Scan implements sql.Scanner, parsing JSON arrays from []byte.

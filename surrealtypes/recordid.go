@@ -1,7 +1,7 @@
 package surrealtypes
 
 import (
-	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +27,8 @@ type IDThings interface {
 }
 
 func ParseID(in string) (SurrealDBRecordID, error) {
+	k := localKemba.Extend("NewRecord")
+
 	isBracket := func(b []rune) bool {
 		// can i avoid the copy?
 		return b[0] == SRIDOpen && b[len(b)-1] == SRIDClose
@@ -48,40 +50,49 @@ func ParseID(in string) (SurrealDBRecordID, error) {
 			right = append(right, b)
 		}
 	}
-
+	k.Printf("Scanned <%s> : <%s>", left, right)
 	if len(left) <= 0 || len(right) <= 0 {
-		return nil, errors.New("unaligned RecordID")
+		return nil, fmt.Errorf("unaligned RecordID: %v, %v : %v", left, right, in)
 	}
 	if isBracket(right) || isTicks(right) {
 		// -> tablename:`abc-def-ghi`
 		// -> tablename:⟨abc-def-ghi⟩
 		// Assume a string value.
+		k.Log("Raw ID")
 		srid = RawID{ID: string(left), Thing: right}
 	} else if i, err := strconv.ParseInt(string(right), 10, 64); err == nil {
+		k.Log("Integer ID")
 		srid = IntID{
 			ID:    string(left),
 			Thing: i,
 		}
 	} else if f, err := strconv.ParseFloat(string(right), 64); err == nil {
+		k.Log("Float ID")
 		srid = FloatID{
 			ID:    string(left),
 			Thing: f,
 		}
 	} else if ulid_id, err := ulid.ParseStrict(string(right)); err == nil {
+		k.Log("ULID ID")
 		srid = ULIDID{
 			ID:    string(left),
 			Thing: ulid_id,
 		}
 	} else if uuid_id, err := uuid.FromString(string(right)); err == nil {
+		k.Log("UUID ID")
 		srid = UUIDID{
 			ID:    string(left),
 			Thing: uuid_id,
 		}
 	} else if gjson.Valid(string(right)) {
+		k.Log("Object ID")
 		srid = ObjectID{
 			ID:    string(left),
 			Thing: gjson.Parse(string(right)),
 		}
+	} else {
+		k.Log("String ID (fallthrough)")
+		srid = StringID{ID: string(left), Thing: string(right)}
 	}
 	// TODO: Range
 	// Any other formatting is literally SurrealQL and I can not parse that.
@@ -105,6 +116,22 @@ func (id RawID) SurrealString() string {
 		out.WriteRune(r)
 	}
 	out.WriteRune(SRIDClose)
+	return out.String()
+}
+
+type StringID struct {
+	ID    string
+	Thing string
+}
+
+var _ (SurrealDBRecordID) = (*StringID)(nil)
+
+// SurrealString implements SurrealDBRecordID.
+func (id StringID) SurrealString() string {
+	out := strings.Builder{}
+	out.WriteString(id.ID)
+	out.WriteByte(':')
+	out.WriteString(id.Thing)
 	return out.String()
 }
 

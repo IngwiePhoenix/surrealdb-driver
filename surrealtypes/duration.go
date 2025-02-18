@@ -36,7 +36,7 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 }
 
 func (d *Duration) MarshalJSON() ([]byte, error) {
-	return json.Marshal(d.Duration.String())
+	return json.MarshalNoEscape(d.Duration.String())
 }
 
 func (d *Duration) Scan(src any) error {
