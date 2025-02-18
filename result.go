@@ -2,7 +2,7 @@ package surrealdbdriver
 
 import (
 	"database/sql/driver"
-	"slices"
+	"errors"
 
 	"github.com/IngwiePhoenix/surrealdb-driver/api"
 	st "github.com/IngwiePhoenix/surrealdb-driver/surrealtypes"
@@ -18,56 +18,53 @@ type SurrealResult struct {
 
 var _ driver.Result = (*SurrealResult)(nil)
 
-// SurrealDB's "record IDs" are strings, not ints.
-// this is likely going to be a problem and a half...
-// I WISH there was a way to represent a record ID nummerically.
-// ...so I hotchpotch'd one. Yay. -.-
-// Also! How the heck do I handle this? Just literally the last one...?
 func (r *SurrealResult) LastInsertId() (int64, error) {
 	k := r.k.Extend("LastInsertID")
-	var rid string = ""
-	if r.RawResult.Method == api.APIMethodQuery {
-		k.Log("handling query")
-		v := r.RawResult.Result.Array()
-		l := len(v)
-		k.Log("length", l)
-		k.Log("v:", r.RawResult.Result)
-		tid := v[l-1].Get("id")
-		if tid.Exists() {
-			rid = tid.String()
-		} else {
-			// INFO FOR...
-			rid = "-2"
-		}
-		k.Log("rid", rid)
-	} else if slices.Contains([]api.APIMethod{
-		api.APIMethodCreate,
-		api.APIMethodInsert,
-		api.APIMethodUpdate,
-		api.APIMethodUpsert,
-		api.APIMethodRelate,
-		api.APIMethodMerge,
-	}, r.RawResult.Method) {
-		k.Log("handling CRUDs")
-		v := r.RawResult.Result
-		if v.IsArray() {
-			k.Log("CRUD is an array")
-			va := v.Array()
-			l := len(va)
-			rid = va[l-1].Get("id").String()
-		} else {
-			k.Log("CRUD is not an array")
-			if va := v.Get("id"); va.Exists() {
-				rid = va.String()
-			}
-		}
-	} else {
-		panic("the API method <" + string(r.RawResult.Method) + "> isn't implemented yet")
+	if r.RawResult.Method != api.APIMethodQuery {
+		return 0, errors.New("can only handle query results")
 	}
 
-	srid, err := st.ParseID(rid)
+	var v gjson.Result
+	if r.RawResult.Result.IsArray() {
+		k.Log("result is an array")
+		a := r.RawResult.Result.Array()
+		l := len(a)
+		v = a[l-1]
+	} else {
+		k.Log("result is an object")
+		v = r.RawResult.Result
+	}
+
+	var res gjson.Result
+	var done bool = false
+	if v.IsArray() {
+		k.Log("target is an array")
+		a := v.Array()
+		l := len(a)
+		o := a[l-1]
+		if o.Get("id").Exists() {
+			k.Log("...and last element has an ID - valid.")
+			res = o
+			done = true
+		}
+	} else if v.IsObject() {
+		k.Log("target is an object")
+		if v.Get("result").Get("id").Exists() {
+			k.Log("...and has an ID, valid.")
+			res = v.Get("result")
+			done = true
+		}
+	}
+
+	if !done {
+		k.Log("Nothing found: " + r.RawResult.Method)
+		// Nothing valid was found. Yeet.
+		return 0, errors.New("could not determine ID; no record was returned")
+	}
+
+	srid, err := st.ParseID(res.Get("id").String())
 	if err != nil {
-		return -1, err
+		return 0, err
 	}
 	idhash := int64(stringToHash(srid.SurrealString()))
 	return idhash, nil
@@ -75,22 +72,21 @@ func (r *SurrealResult) LastInsertId() (int64, error) {
 
 func (r *SurrealResult) RowsAffected() (int64, error) {
 	v := r.RawResult.Result
-	if r.RawResult.Method == api.APIMethodQuery {
-		return int64(len(v.Array())), nil
-	} else if v.IsArray() {
-		var objsFound int64 = 0
-		v.ForEach(func(_, value gjson.Result) bool {
-			if value.IsObject() && value.Get("id").Exists() {
-				objsFound++
-				return true
-			}
-			return false
-		})
-		return objsFound, nil
-	} else if v.Type == gjson.Null {
-		return 0, nil
+	if r.RawResult.Method != api.APIMethodQuery {
+		return -1, errors.New("can only handle query results")
 	}
 
-	// Everything else is one value, and one value only.
-	return 1, nil
+	if v.IsArray() {
+		var count int
+		v.ForEach(func(_, value gjson.Result) bool {
+			if value.IsObject() {
+				count++
+			}
+			return true
+		})
+		return int64(count), nil
+	} else {
+		// Even {result: [NONE]} (i.e. from signin) is one affected row.
+		return 1, nil
+	}
 }
