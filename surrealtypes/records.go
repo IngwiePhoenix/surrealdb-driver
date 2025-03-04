@@ -57,7 +57,7 @@ func (r *Records[T]) UnmarshalJSON(b []byte) error {
 		data.ForEach(func(key, value gjson.Result) bool {
 			k.Extend("ForEach").Log(key, value)
 			var one Record[T]
-			err = json.Unmarshal(b, &one)
+			err = json.Unmarshal([]byte(value.Raw), &one)
 			if err != nil {
 				return false
 			}
