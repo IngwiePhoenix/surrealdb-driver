@@ -94,8 +94,9 @@ func (r *Record[T]) UnmarshalJSON(b []byte) error {
 	r.id = id
 	r.hasData = true
 	r.hasId = true
-	defer k.Log("done", r.inner)
-	return json.Unmarshal([]byte(data.Raw), &r.inner)
+	err = json.Unmarshal([]byte(data.Raw), &r.inner)
+	k.Log("done", r.inner)
+	return err
 }
 
 func (r *Record[T]) MarshalJSON() ([]byte, error) {
