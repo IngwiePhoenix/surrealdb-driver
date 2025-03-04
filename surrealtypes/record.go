@@ -100,12 +100,16 @@ func (r *Record[T]) UnmarshalJSON(b []byte) error {
 }
 
 func (r *Record[T]) MarshalJSON() ([]byte, error) {
+	k := recordTKemba.Extend("MarshalJSON")
 	switch {
 	case r.hasData && r.hasId:
+		k.Log("hasData && hasId")
 		return json.MarshalNoEscape(r.inner)
 	case !r.hasData && r.hasId:
+		k.Log("!hasData && hasId")
 		return json.MarshalNoEscape(r.id.SurrealString())
 	case !r.hasData && !r.hasId:
+		k.Log("!hasData && !hasId")
 		return []byte("null"), nil
 	}
 	panic("unreachable Record[T].MarshalJSON(...)")
@@ -124,5 +128,6 @@ func (r *Record[T]) Scan(src any) error {
 }
 
 func (r *Record[T]) Value() (driver.Value, error) {
+	recordTKemba.Extend("Value").Log("-> MarshalJSON")
 	return r.MarshalJSON()
 }

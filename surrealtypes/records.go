@@ -55,8 +55,8 @@ func (r *Records[T]) UnmarshalJSON(b []byte) error {
 		k.Log("array has more than one object")
 		r.hasAnything = true
 		data.ForEach(func(key, value gjson.Result) bool {
-			k.Log(key, value)
-			one := Record[T]{}
+			k.Extend("ForEach").Log(key, value)
+			var one Record[T]
 			err = json.Unmarshal([]byte(value.Raw), &one)
 			if err != nil {
 				return false
@@ -73,16 +73,21 @@ func (r *Records[T]) UnmarshalJSON(b []byte) error {
 }
 
 func (r *Records[T]) MarshalJSON() ([]byte, error) {
+	k := recordsTkemba.Extend("MarshalJSON")
 	if r.hasAnything {
+		k.Printf("Unmarshalling Records[T] -> %T", r.inner)
 		return json.MarshalNoEscape(r.inner)
 	} else {
+		k.Log("Nothing to unmarshal, returning empty array")
 		return []byte("[]"), nil
 	}
 }
 
 func (r *Records[T]) Scan(src any) error {
+	k := recordsTkemba.Extend("Scan")
 	switch data := src.(type) {
 	case []byte:
+		k.Log("Found []byte")
 		return r.UnmarshalJSON(data)
 	default:
 		return fmt.Errorf("input must be []byte, found %T", src)
@@ -90,5 +95,7 @@ func (r *Records[T]) Scan(src any) error {
 }
 
 func (r *Records[T]) Value() (driver.Value, error) {
+	k := recordsTkemba.Extend("Value")
+	k.Log("-> MarshalJSON")
 	return r.MarshalJSON()
 }
