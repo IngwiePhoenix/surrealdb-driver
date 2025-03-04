@@ -12,7 +12,7 @@ import (
 var recordsTkemba = localKemba.Extend("Records[T]")
 
 type Records[T any] struct {
-	inner       []Record[T]
+	inner       []*Record[T]
 	hasAnything bool
 }
 
@@ -26,14 +26,15 @@ var _ sql.Scanner = (*Records[T])(nil)
 func NewRecords[T any](obj []T) Records[T] {
 	k := recordsTkemba.Extend("NewRecords[T]")
 	k.Printf("Making Record[T]s off of %T", obj)
-	out := make([]Record[T], len(obj))
+	out := make([]*Record[T], len(obj))
 	for _, o := range obj {
-		out = append(out, NewRecord(o))
+		r := NewRecord(o)
+		out = append(out, &r)
 	}
 	return Records[T]{inner: out}
 }
 
-func (r *Records[T]) Get() ([]Record[T], bool) {
+func (r *Records[T]) Get() ([]*Record[T], bool) {
 	return r.inner, r.hasAnything
 }
 
@@ -57,8 +58,8 @@ func (r *Records[T]) UnmarshalJSON(b []byte) error {
 		data.ForEach(func(key, value gjson.Result) bool {
 			k := k.Extend("ForEach")
 			k.Log("processing", key, value)
-			var one Record[T]
-			err = json.Unmarshal([]byte(value.Raw), &one)
+			one := new(Record[T])
+			err = json.Unmarshal([]byte(value.Raw), one)
 			if err != nil {
 				return false
 			}
@@ -78,11 +79,7 @@ func (r *Records[T]) MarshalJSON() ([]byte, error) {
 	if r.hasAnything {
 		// BUG(IP): %T may result in pretty.formatter from github.com/kr/pretty ... fml.
 		k.Log(fmt.Sprintf("Marshalling Records[T] -> %T", r.inner), r.inner)
-		recs := make([]*Record[T], len(r.inner))
-		for _, r := range r.inner {
-			recs = append(recs, &r)
-		}
-		return json.Marshal(recs)
+		return json.Marshal(r.inner)
 	} else {
 		k.Log("Nothing to unmarshal, returning empty array")
 		return []byte("[]"), nil
