@@ -78,7 +78,11 @@ func (r *Records[T]) MarshalJSON() ([]byte, error) {
 	if r.hasAnything {
 		// BUG(IP): %T may result in pretty.formatter from github.com/kr/pretty ... fml.
 		k.Log(fmt.Sprintf("Marshalling Records[T] -> %T", r.inner), r.inner)
-		return json.Marshal(r.inner)
+		recs := make([]*Record[T], len(r.inner))
+		for _, r := range r.inner {
+			recs = append(recs, &r)
+		}
+		return json.Marshal(recs)
 	} else {
 		k.Log("Nothing to unmarshal, returning empty array")
 		return []byte("[]"), nil
