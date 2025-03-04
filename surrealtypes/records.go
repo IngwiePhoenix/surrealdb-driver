@@ -12,7 +12,8 @@ import (
 var recordsTkemba = localKemba.Extend("Records[T]")
 
 type Records[T any] struct {
-	inner []Record[T]
+	inner       []Record[T]
+	hasAnything bool
 }
 
 /*
@@ -32,8 +33,8 @@ func NewRecords[T any](obj []T) Records[T] {
 	return Records[T]{inner: out}
 }
 
-func (r *Records[T]) Get() []Record[T] {
-	return r.inner
+func (r *Records[T]) Get() ([]Record[T], bool) {
+	return r.inner, r.hasAnything
 }
 
 func (r *Records[T]) Len() int {
@@ -49,22 +50,32 @@ func (r *Records[T]) UnmarshalJSON(b []byte) error {
 	}
 
 	var err error = nil
-	data.ForEach(func(key, value gjson.Result) bool {
-		k.Log(key, value)
-		one := Record[T]{}
-		err = json.Unmarshal([]byte(value.Raw), &one)
-		if err != nil {
-			return false
-		}
-		r.inner = append(r.inner, one)
-		return true
-	})
+
+	if len(data.Array()) > 0 {
+		r.hasAnything = true
+		data.ForEach(func(key, value gjson.Result) bool {
+			k.Log(key, value)
+			one := Record[T]{}
+			err = json.Unmarshal([]byte(value.Raw), &one)
+			if err != nil {
+				return false
+			}
+			r.inner = append(r.inner, one)
+			return true
+		})
+	} else {
+		r.hasAnything = false
+	}
 	k.Log(err)
 	return err
 }
 
 func (r *Records[T]) MarshalJSON() ([]byte, error) {
-	return json.MarshalNoEscape(r.inner)
+	if r.hasAnything {
+		return json.MarshalNoEscape(r.inner)
+	} else {
+		return []byte("[]"), nil
+	}
 }
 
 func (r *Records[T]) Scan(src any) error {
