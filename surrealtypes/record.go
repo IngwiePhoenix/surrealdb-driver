@@ -13,7 +13,7 @@ import (
 var recordTKemba = localKemba.Extend("Record[T]")
 
 type Record[T any] struct {
-	inner   T
+	inner   *T
 	id      SurrealDBRecordID
 	hasData bool
 	hasId   bool
@@ -27,7 +27,7 @@ var _ sql.Scanner = (*Record[T])(nil)
 */
 
 func NewRecord[T any](obj T) Record[T] {
-	return Record[T]{inner: obj}
+	return Record[T]{inner: &obj}
 }
 
 func (r *Record[T]) HasData() bool {
@@ -45,7 +45,7 @@ func (r *Record[T]) innerIsSlice() bool {
 
 func (r *Record[T]) Get() (*T, bool) {
 	if r.hasData {
-		return &r.inner, true
+		return r.inner, true
 	} else {
 		return nil, false
 	}
@@ -94,7 +94,7 @@ func (r *Record[T]) UnmarshalJSON(b []byte) error {
 	r.id = id
 	r.hasData = true
 	r.hasId = true
-	err = json.Unmarshal([]byte(data.Raw), &r.inner)
+	err = json.Unmarshal([]byte(data.Raw), r.inner)
 	k.Log("done", r.inner)
 	return err
 }
