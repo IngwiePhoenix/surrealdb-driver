@@ -16,6 +16,7 @@ type Record[T any] struct {
 	inner   T
 	id      SurrealDBRecordID
 	hasData bool
+	hasId   bool
 }
 
 /*
@@ -33,13 +34,29 @@ func (r *Record[T]) HasData() bool {
 	return r.hasData
 }
 
+func (r *Record[T]) HasID() bool {
+	return r.hasId
+}
+
 func (r *Record[T]) innerIsSlice() bool {
 	t := reflect.TypeOf(r.inner)
 	return t.Kind() == reflect.Slice
 }
 
-func (r *Record[T]) Get() T {
-	return r.inner
+func (r *Record[T]) Get() (*T, bool) {
+	if r.hasData {
+		return &r.inner, true
+	} else {
+		return nil, false
+	}
+}
+
+func (r *Record[T]) GetID() (SurrealDBRecordID, bool) {
+	if r.hasId {
+		return r.id, true
+	} else {
+		return nil, false
+	}
 }
 
 func (r *Record[T]) UnmarshalJSON(b []byte) error {
@@ -62,7 +79,8 @@ func (r *Record[T]) UnmarshalJSON(b []byte) error {
 		}
 		k.Log(id, err)
 		r.id = id
-		//r.inner = nil
+		r.hasData = false
+		r.hasId = true
 		return nil
 	}
 
@@ -74,11 +92,20 @@ func (r *Record[T]) UnmarshalJSON(b []byte) error {
 	}
 	r.id = id
 	r.hasData = true
+	r.hasId = true
 	return json.Unmarshal(b, &r.inner)
 }
 
 func (r *Record[T]) MarshalJSON() ([]byte, error) {
-	return json.MarshalNoEscape(r.inner)
+	switch {
+	case r.hasData && r.hasId:
+		return json.MarshalNoEscape(r.inner)
+	case !r.hasData && r.hasId:
+		return json.MarshalNoEscape(r.id.SurrealString())
+	case !r.hasData && !r.hasId:
+		return []byte("null"), nil
+	}
+	panic("unreachable Record[T].MarshalJSON(...)")
 }
 
 func (r *Record[T]) Scan(src any) error {
