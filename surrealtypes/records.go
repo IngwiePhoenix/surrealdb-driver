@@ -77,7 +77,7 @@ func (r *Records[T]) MarshalJSON() ([]byte, error) {
 	k := recordsTkemba.Extend("MarshalJSON")
 	if r.hasAnything {
 		// BUG(IP): %T may result in pretty.formatter from github.com/kr/pretty ... fml.
-		k.Log(fmt.Sprintf("Marshalling Records[T] -> %T", r.inner))
+		k.Log(fmt.Sprintf("Marshalling Records[T] -> %T", r.inner), r.inner)
 		return json.Marshal(r.inner)
 	} else {
 		k.Log("Nothing to unmarshal, returning empty array")

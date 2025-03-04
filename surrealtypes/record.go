@@ -103,7 +103,7 @@ func (r *Record[T]) MarshalJSON() ([]byte, error) {
 	k := recordTKemba.Extend("MarshalJSON")
 	switch {
 	case r.hasData && r.hasId:
-		k.Log("hasData && hasId")
+		k.Log("hasData && hasId", r.inner)
 		return json.MarshalNoEscape(r.inner)
 	case !r.hasData && r.hasId:
 		k.Log("!hasData && hasId")
