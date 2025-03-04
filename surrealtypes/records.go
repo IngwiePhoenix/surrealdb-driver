@@ -52,6 +52,7 @@ func (r *Records[T]) UnmarshalJSON(b []byte) error {
 	var err error = nil
 
 	if len(data.Array()) > 0 {
+		k.Log("array has more than one object")
 		r.hasAnything = true
 		data.ForEach(func(key, value gjson.Result) bool {
 			k.Log(key, value)
@@ -64,6 +65,7 @@ func (r *Records[T]) UnmarshalJSON(b []byte) error {
 			return true
 		})
 	} else {
+		k.Log("array has no values")
 		r.hasAnything = false
 	}
 	k.Log(err)

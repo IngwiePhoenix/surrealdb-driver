@@ -62,6 +62,7 @@ func (r *Record[T]) GetID() (SurrealDBRecordID, bool) {
 func (r *Record[T]) UnmarshalJSON(b []byte) error {
 	k := recordTKemba.Extend("UnmarshalJSON")
 	data := gjson.ParseBytes(b)
+	k.Printf("in: %v", b)
 
 	if r.innerIsSlice() {
 		return errors.New("surrealtypes/record: T is a slice, expected a single type (ment st.Records[T]?)")
@@ -93,7 +94,7 @@ func (r *Record[T]) UnmarshalJSON(b []byte) error {
 	r.id = id
 	r.hasData = true
 	r.hasId = true
-	return json.Unmarshal(b, &r.inner)
+	return json.Unmarshal([]byte(data.Raw), &r.inner)
 }
 
 func (r *Record[T]) MarshalJSON() ([]byte, error) {
