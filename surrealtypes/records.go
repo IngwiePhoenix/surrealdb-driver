@@ -55,7 +55,8 @@ func (r *Records[T]) UnmarshalJSON(b []byte) error {
 		k.Log("array has more than one object")
 		r.hasAnything = true
 		data.ForEach(func(key, value gjson.Result) bool {
-			k.Extend("ForEach").Log(key, value)
+			k := k.Extend("ForEach")
+			k.Log("processing", key, value)
 			var one Record[T]
 			err = json.Unmarshal([]byte(value.Raw), &one)
 			if err != nil {
@@ -76,8 +77,8 @@ func (r *Records[T]) MarshalJSON() ([]byte, error) {
 	k := recordsTkemba.Extend("MarshalJSON")
 	if r.hasAnything {
 		// BUG(IP): %T may result in pretty.formatter from github.com/kr/pretty ... fml.
-		k.Log(fmt.Printf("Marshalling Records[T] -> %T", r.inner))
-		return json.MarshalNoEscape(r.inner)
+		k.Log(fmt.Sprintf("Marshalling Records[T] -> %T", r.inner))
+		return json.Marshal(r.inner)
 	} else {
 		k.Log("Nothing to unmarshal, returning empty array")
 		return []byte("[]"), nil
