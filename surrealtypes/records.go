@@ -50,29 +50,28 @@ func (r *Records[T]) UnmarshalJSON(b []byte) error {
 		return errors.New("surrealtypes/records: got a non-array, needed an array")
 	}
 
-	var err error = nil
-
 	if len(data.Array()) > 0 {
 		k.Log("array has more than one object")
 		r.hasAnything = true
-		data.ForEach(func(key, value gjson.Result) bool {
+		for _, value := range data.Array() {
 			k := k.Extend("ForEach")
-			k.Log("processing", key, value)
+			k.Log("processing", value)
+			// @AI(ChatGPT)
+			k.Printf("Raw: %s\n", value.Raw)
+			k.Printf("Unescaped: %s\n", value.String())
+
 			one := new(Record[T])
-			err = json.UnmarshalNoEscape([]byte(value.Raw), one)
-			if err != nil {
+			if err := json.Unmarshal([]byte(value.Raw), one); err != nil {
 				k.Log("Error caused with this: ", value.Raw)
-				return false
+				return err
 			}
 			r.inner = append(r.inner, one)
-			return true
-		})
+		}
 	} else {
 		k.Log("array has no values")
 		r.hasAnything = false
 	}
-	k.Log(err)
-	return err
+	return nil
 }
 
 func (r *Records[T]) MarshalJSON() ([]byte, error) {
@@ -80,7 +79,7 @@ func (r *Records[T]) MarshalJSON() ([]byte, error) {
 	if r.hasAnything {
 		// BUG(IP): %T may result in pretty.formatter from github.com/kr/pretty ... fml.
 		k.Log(fmt.Sprintf("Marshalling Records[T] -> %T", r.inner), r.inner)
-		return json.Marshal(r.inner)
+		return json.MarshalNoEscape(r.inner)
 	} else {
 		k.Log("Nothing to unmarshal, returning empty array")
 		return []byte("[]"), nil
