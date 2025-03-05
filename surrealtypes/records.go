@@ -59,9 +59,9 @@ func (r *Records[T]) UnmarshalJSON(b []byte) error {
 			k := k.Extend("ForEach")
 			k.Log("processing", key, value)
 			one := new(Record[T])
-			err = json.Unmarshal([]byte(value.Raw), one)
+			err = json.UnmarshalNoEscape([]byte(value.Raw), one)
 			if err != nil {
-				k.Log("Error caused with this: " + value.Raw)
+				k.Log("Error caused with this: ", value.Raw)
 				return false
 			}
 			r.inner = append(r.inner, one)
