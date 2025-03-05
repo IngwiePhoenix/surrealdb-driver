@@ -61,6 +61,7 @@ func (r *Records[T]) UnmarshalJSON(b []byte) error {
 			one := new(Record[T])
 			err = json.Unmarshal([]byte(value.Raw), one)
 			if err != nil {
+				k.Log("Error caused with this: " + value.Raw)
 				return false
 			}
 			r.inner = append(r.inner, one)
