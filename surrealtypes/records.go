@@ -5,12 +5,10 @@ import (
 	"errors"
 	"fmt"
 
-	"encoding/json"
-
+	"github.com/goccy/go-json"
 	"github.com/tidwall/gjson"
 )
 
-// temporarily not using github.com/goccy/go-json
 var recordsTkemba = localKemba.Extend("Records[T]")
 
 type Records[T any] struct {
@@ -58,10 +56,6 @@ func (r *Records[T]) UnmarshalJSON(b []byte) error {
 		for _, value := range data.Array() {
 			k := k.Extend("ForEach")
 			k.Log("processing", value)
-			// @AI(ChatGPT)
-			k.Printf("Raw: %s\n", value.Raw)
-			k.Printf("Unescaped: %s\n", value.String())
-
 			one := new(Record[T])
 			if err := json.Unmarshal([]byte(value.Raw), one); err != nil {
 				k.Log("Error caused with this: ", value.Raw)

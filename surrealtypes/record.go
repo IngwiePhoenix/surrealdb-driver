@@ -88,14 +88,15 @@ func (r *Record[T]) UnmarshalJSON(b []byte) error {
 	// This is mainly for safety: A record should be an object.
 	k.Log("It's a normal object, deserialize it")
 	id, err := ParseID(data.Get("id").String())
+	k.Log("done id", id.SurrealString(), err)
 	if err != nil {
 		return err
 	}
 	r.id = id
 	r.hasData = true
 	r.hasId = true
-	err = json.Unmarshal([]byte(data.Raw), &r.inner)
-	k.Log("done", r.inner)
+	err = json.Unmarshal(b, &r.inner)
+	k.Log("done obj", r.inner, err)
 	return err
 }
 
