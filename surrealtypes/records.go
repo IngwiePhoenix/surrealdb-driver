@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/goccy/go-json"
+	"encoding/json"
+
 	"github.com/tidwall/gjson"
 )
 
+// temporarily not using github.com/goccy/go-json
 var recordsTkemba = localKemba.Extend("Records[T]")
 
 type Records[T any] struct {
@@ -79,7 +81,7 @@ func (r *Records[T]) MarshalJSON() ([]byte, error) {
 	if r.hasAnything {
 		// BUG(IP): %T may result in pretty.formatter from github.com/kr/pretty ... fml.
 		k.Log(fmt.Sprintf("Marshalling Records[T] -> %T", r.inner), r.inner)
-		return json.MarshalNoEscape(r.inner)
+		return json.Marshal(r.inner)
 	} else {
 		k.Log("Nothing to unmarshal, returning empty array")
 		return []byte("[]"), nil
