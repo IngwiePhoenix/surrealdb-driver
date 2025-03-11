@@ -53,6 +53,12 @@ func ParseID(in string) (SurrealDBRecordID, error) {
 	if len(left) <= 0 || len(right) <= 0 {
 		return nil, fmt.Errorf("unaligned RecordID: %v, %v : %v", left, right, in)
 	}
+	if len(left) >= 2 && left[0] == '\\' && left[1] == '"' {
+		left = left[2:]
+	}
+	if len(right) >= 2 && right[len(right)-2] == '\\' && right[len(right)-1] == '"' {
+		right = right[:len(right)-2]
+	}
 	if isBracket(right) || isTicks(right) {
 		// -> tablename:`abc-def-ghi`
 		// -> tablename:⟨abc-def-ghi⟩
