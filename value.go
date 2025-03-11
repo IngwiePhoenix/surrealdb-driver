@@ -13,7 +13,7 @@ import (
 func gjsonNumberToDriverValue(input gjson.Result) (driver.Value, error) {
 	k := localKemba.Extend("gjsonNumberToDriverValue")
 
-	str := input.Str
+	str := input.String()
 	if strings.Contains(str, ".") || strings.ContainsAny(str, "eE") {
 		k.Printf("attempting to parse as float (%s)\n", str)
 		if f, err := strconv.ParseFloat(str, 64); err == nil {
