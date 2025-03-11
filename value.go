@@ -15,14 +15,14 @@ func gjsonNumberToDriverValue(input gjson.Result) (driver.Value, error) {
 
 	str := input.Str
 	if strings.Contains(str, ".") || strings.ContainsAny(str, "eE") {
-		k.Log("attempting to parse as float (%s)", str)
+		k.Printf("attempting to parse as float (%s)\n", str)
 		if f, err := strconv.ParseFloat(str, 64); err == nil {
 			return f, nil
 		} else {
 			return nil, err
 		}
 	} else {
-		k.Log("attempting to parse as int (%s)", str)
+		k.Printf("attempting to parse as int (%s)\n", str)
 		// Try parsing as int
 		if i, err := strconv.ParseInt(str, 10, 64); err == nil {
 			return i, nil
@@ -32,7 +32,7 @@ func gjsonNumberToDriverValue(input gjson.Result) (driver.Value, error) {
 	}
 
 	// Fallback: parse as float (shouldn't reach here under normal circumstances)
-	k.Log("falling through! (%s)", str)
+	k.Printf("falling through! (%s)\n", str)
 	f, err := strconv.ParseFloat(str, 64)
 	return f, err
 }
@@ -56,13 +56,13 @@ func convertValue(input gjson.Result) (driver.Value, error) {
 		k.Log("Converting string")
 		k.Log("...is it a time, duration or just a string?")
 		if t, err := time.Parse(time.RFC3339Nano, input.String()); err == nil {
-			k.Log("it's time: %v", t)
+			k.Printf("it's time: %v\n", t)
 			return t, nil
 		} else if t, err := time.ParseDuration(input.String()); err == nil {
-			k.Log("it's duration: %v", t)
+			k.Printf("it's duration: %v\n", t)
 			return t, nil
 		} else {
-			k.Log("it's string: %v", input.String())
+			k.Printf("it's string: %v\n", input.String())
 			return input.String(), nil
 		}
 	}
