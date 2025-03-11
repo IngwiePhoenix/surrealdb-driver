@@ -10,7 +10,7 @@ import (
 )
 
 type ObjectID struct {
-	ID    string
+	Table string
 	Thing gjson.Result
 }
 
@@ -19,7 +19,7 @@ var _ (SurrealDBRecordID) = (*ObjectID)(nil)
 // SurrealString implements SurrealDBRecordID.
 func (id ObjectID) SurrealString() string {
 	out := strings.Builder{}
-	out.WriteString(id.ID)
+	out.WriteString(id.Table)
 	out.WriteByte(':')
 	out.WriteString(id.Thing.Raw)
 	return out.String()

@@ -8,7 +8,7 @@ import (
 )
 
 type FloatID struct {
-	ID    string
+	Table string
 	Thing float64
 }
 
@@ -16,7 +16,7 @@ var _ (SurrealDBRecordID) = (*FloatID)(nil)
 
 func (id FloatID) SurrealString() string {
 	out := strings.Builder{}
-	out.WriteString(id.ID)
+	out.WriteString(id.Table)
 	out.WriteByte(':')
 	// TODO: Information loss...?
 	out.WriteString(strconv.FormatFloat(id.Thing, 'f', -1, 64))

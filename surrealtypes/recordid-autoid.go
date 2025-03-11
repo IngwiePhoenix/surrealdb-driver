@@ -17,7 +17,7 @@ const (
 
 // TODO: this currently does not retrive the ID.
 type AutoID struct {
-	ID    string
+	Table string
 	Thing AutoIDFunc
 }
 
@@ -25,7 +25,7 @@ var _ (SurrealDBRecordID) = (*AutoID)(nil)
 
 func (id AutoID) SurrealString() string {
 	out := strings.Builder{}
-	out.WriteString(id.ID)
+	out.WriteString(id.Table)
 	out.WriteByte(':')
 	out.WriteString(string(id.Thing))
 	return out.String()

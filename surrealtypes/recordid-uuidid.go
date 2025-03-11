@@ -10,7 +10,7 @@ import (
 )
 
 type UUIDID struct {
-	ID    string
+	Table string
 	Thing uuid.UUID
 }
 
@@ -18,7 +18,7 @@ var _ (SurrealDBRecordID) = (*UUIDID)(nil)
 
 func (id UUIDID) SurrealString() string {
 	out := strings.Builder{}
-	out.WriteString(id.ID)
+	out.WriteString(id.Table)
 	out.WriteByte(':')
 	out.WriteRune(SRIDOpen)
 	out.WriteString(id.Thing.String())

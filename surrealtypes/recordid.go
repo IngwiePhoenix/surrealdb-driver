@@ -72,40 +72,40 @@ func ParseID(in string) (SurrealDBRecordID, error) {
 		// -> tablename:⟨abc-def-ghi⟩
 		// Assume a string value.
 		k.Log("Raw ID")
-		srid = RawID{ID: string(left), Thing: right}
+		srid = RawID{Table: string(left), Thing: right}
 	} else if i, err := strconv.ParseInt(string(right), 10, 64); err == nil {
 		k.Log("Integer ID")
 		srid = IntID{
-			ID:    string(left),
+			Table: string(left),
 			Thing: i,
 		}
 	} else if f, err := strconv.ParseFloat(string(right), 64); err == nil {
 		k.Log("Float ID")
 		srid = FloatID{
-			ID:    string(left),
+			Table: string(left),
 			Thing: f,
 		}
 	} else if ulid_id, err := ulid.ParseStrict(string(right)); err == nil {
 		k.Log("ULID ID")
 		srid = ULIDID{
-			ID:    string(left),
+			Table: string(left),
 			Thing: ulid_id,
 		}
 	} else if uuid_id, err := uuid.FromString(string(right)); err == nil {
 		k.Log("UUID ID")
 		srid = UUIDID{
-			ID:    string(left),
+			Table: string(left),
 			Thing: uuid_id,
 		}
 	} else if gjson.Valid(string(right)) {
 		k.Log("Object ID")
 		srid = ObjectID{
-			ID:    string(left),
+			Table: string(left),
 			Thing: gjson.Parse(string(right)),
 		}
 	} else {
 		k.Log("String ID (fallthrough)")
-		srid = StringID{ID: string(left), Thing: string(right)}
+		srid = StringID{Table: string(left), Thing: string(right)}
 	}
 	// TODO: Range
 	// Any other formatting is literally SurrealQL and I can not parse that.

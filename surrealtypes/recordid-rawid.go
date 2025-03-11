@@ -8,7 +8,7 @@ import (
 )
 
 type RawID struct {
-	ID    string
+	Table string
 	Thing []rune
 }
 
@@ -17,7 +17,7 @@ var _ (SurrealDBRecordID) = (*RawID)(nil)
 // SurrealString implements SurrealDBRecordID.
 func (id RawID) SurrealString() string {
 	out := strings.Builder{}
-	out.WriteString(id.ID)
+	out.WriteString(id.Table)
 	out.WriteByte(':')
 	out.WriteRune(SRIDOpen)
 	for _, r := range id.Thing {

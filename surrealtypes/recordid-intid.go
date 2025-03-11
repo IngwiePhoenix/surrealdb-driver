@@ -8,7 +8,7 @@ import (
 )
 
 type IntID struct {
-	ID    string
+	Table string
 	Thing int64
 }
 
@@ -16,7 +16,7 @@ var _ (SurrealDBRecordID) = (*IntID)(nil)
 
 func (id IntID) SurrealString() string {
 	out := strings.Builder{}
-	out.WriteString(id.ID)
+	out.WriteString(id.Table)
 	out.WriteByte(':')
 	// TODO: Information loss...?
 	out.WriteString(strconv.Itoa(int(id.Thing)))

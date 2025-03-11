@@ -8,7 +8,7 @@ import (
 )
 
 type StringID struct {
-	ID    string
+	Table string
 	Thing string
 }
 
@@ -17,7 +17,7 @@ var _ (SurrealDBRecordID) = (*StringID)(nil)
 // SurrealString implements SurrealDBRecordID.
 func (id StringID) SurrealString() string {
 	out := strings.Builder{}
-	out.WriteString(id.ID)
+	out.WriteString(id.Table)
 	out.WriteByte(':')
 	out.WriteString(id.Thing)
 	return out.String()
