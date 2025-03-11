@@ -59,6 +59,14 @@ func ParseID(in string) (SurrealDBRecordID, error) {
 	if len(right) >= 2 && right[len(right)-2] == '\\' && right[len(right)-1] == '"' {
 		right = right[:len(right)-2]
 	}
+	// TODO(IP): Sometimes there is JUST a single quote here.
+	// I should debug that, but I am a bit short on time. So, here is a classic monkey-donkey-patch.
+	if len(left) >= 1 && left[0] == '"' {
+		left = left[1:]
+	}
+	if len(right) >= 1 && right[len(right)-1] == '"' {
+		right = right[:len(right)-1]
+	}
 	if isBracket(right) || isTicks(right) {
 		// -> tablename:`abc-def-ghi`
 		// -> tablename:⟨abc-def-ghi⟩
