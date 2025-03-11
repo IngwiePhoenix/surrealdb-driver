@@ -3,6 +3,7 @@ package surrealtypes
 import (
 	"database/sql/driver"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -34,7 +35,7 @@ func (id *ObjectID) UnmarshalJSON(b []byte) error {
 	return nil
 }
 func (id *ObjectID) MarshalJSON() ([]byte, error) {
-	s := id.SurrealString()
+	s := strconv.QuoteToGraphic(id.SurrealString())
 	return []byte(s), nil
 }
 func (id *ObjectID) Scan(src any) error {

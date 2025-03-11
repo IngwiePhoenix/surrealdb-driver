@@ -3,6 +3,7 @@ package surrealtypes
 import (
 	"database/sql/driver"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/gofrs/uuid/v5"
@@ -35,7 +36,7 @@ func (id *UUIDID) UnmarshalJSON(b []byte) error {
 	return nil
 }
 func (id *UUIDID) MarshalJSON() ([]byte, error) {
-	s := id.SurrealString()
+	s := strconv.QuoteToGraphic(id.SurrealString())
 	return []byte(s), nil
 }
 func (id *UUIDID) Scan(src any) error {

@@ -3,6 +3,7 @@ package surrealtypes
 import (
 	"database/sql/driver"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -40,7 +41,7 @@ func (id *AutoID) UnmarshalJSON(b []byte) error {
 	return nil
 }
 func (id *AutoID) MarshalJSON() ([]byte, error) {
-	s := id.SurrealString()
+	s := strconv.QuoteToGraphic(id.SurrealString())
 	return []byte(s), nil
 }
 func (id *AutoID) Scan(src any) error {

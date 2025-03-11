@@ -33,7 +33,7 @@ func (id *IntID) UnmarshalJSON(b []byte) error {
 	return nil
 }
 func (id *IntID) MarshalJSON() ([]byte, error) {
-	s := id.SurrealString()
+	s := strconv.QuoteToGraphic(id.SurrealString())
 	return []byte(s), nil
 }
 func (id *IntID) Scan(src any) error {
